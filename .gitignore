@@ -1,0 +1,8 @@
+# Tajný API klíč — NIKDY nesmí do gitu
+.env
+env-vzor.txt
+
+# Pracovní soubory
+preklady_cache.json
+__pycache__/
+.DS_Store
