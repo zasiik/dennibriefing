@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Můj přehled zpráv</title>
+<style>
+  :root {
+    --pozadi: #f7f5f1; --karta: #ffffff; --text: #191919;
+    --seda: #8a8578; --okraj: #e7e2d8; --odstavec: #44413a;
+    --linka: #d8d2c4; --graf: #2c4a6e;
+  }
+  body.tmavy {
+    --pozadi: #121217; --karta: #1c1c24; --text: #ededf2;
+    --seda: #8f8f9c; --okraj: #2c2c37; --odstavec: #c6c6d0;
+    --linka: #34343f; --graf: #7fa3d0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--pozadi); color: var(--text);
+    line-height: 1.55; padding: 0 20px 70px;
+    transition: background-color .45s ease, color .45s ease;
+    position: relative; min-height: 100vh;
+  }
+  body::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(900px 380px at 30% -80px,
+        color-mix(in srgb, #1d5c4d 7%, transparent), transparent 70%),
+      radial-gradient(900px 380px at 70% -80px,
+        color-mix(in srgb, #5d4870 6%, transparent), transparent 70%);
+  }
+  .obal {
+    max-width: 1080px; margin: 0 auto; position: relative; z-index: 1;
+    transition: opacity .22s ease;
+  }
+  .obal.prolinani { opacity: 0; }
+
+  /* ---------- Hlavička ---------- */
+  header.hlavicka { padding: 58px 0 10px; text-align: center; }
+  .nadtitulek {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.32em;
+    text-transform: uppercase; color: var(--seda); margin-bottom: 10px;
+  }
+  header.hlavicka h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2.1rem, 5vw, 3rem);
+    font-weight: 700; letter-spacing: -0.015em;
+  }
+  header.hlavicka .cas { color: var(--seda); font-size: 0.9rem; margin-top: 10px; }
+
+  /* ---------- Přepínač stránek Zprávy | Data ---------- */
+  nav.stranky {
+    display: flex; justify-content: center; margin: 20px 0 30px;
+  }
+  .stranky-vnitrek {
+    display: inline-flex; border: 1px solid var(--okraj);
+    border-radius: 999px; padding: 3px; background: var(--karta);
+    transition: background-color .45s ease, border-color .45s ease;
+  }
+  a.stranka {
+    text-decoration: none; color: var(--seda);
+    border-radius: 999px; padding: 7px 22px; font-size: 0.9rem;
+    font-weight: 600;
+    transition: background-color .25s ease, color .25s ease;
+  }
+  a.stranka.aktivni { background: var(--text); color: var(--pozadi); }
+  a.stranka:not(.aktivni):hover { color: var(--text); }
+
+  /* ---------- Přepínače vpravo nahoře ---------- */
+  .prepinace { position: absolute; top: 20px; right: 0; display: flex; gap: 8px; }
+  .prepinac {
+    border: 1px solid var(--okraj); background: var(--karta); color: var(--text);
+    border-radius: 999px; padding: 7px 14px; font-size: 0.85rem; cursor: pointer;
+    transition: background-color .45s ease, color .45s ease,
+                border-color .45s ease, transform .15s ease;
+  }
+  .prepinac:hover { transform: translateY(-1px); border-color: var(--seda); }
+  .prepinac:active { transform: scale(0.94); }
+
+  /* ---------- Filtry témat ---------- */
+  nav.filtry {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: center; margin: 26px 0 28px;
+  }
+  .filtr {
+    border: 1px solid var(--okraj); background: var(--karta);
+    border-radius: 999px; padding: 7px 15px; font-size: 0.85rem;
+    cursor: pointer; color: var(--text);
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color .3s ease, color .3s ease,
+                border-color .3s ease, transform .15s ease;
+  }
+  .filtr:hover { transform: translateY(-1px); border-color: var(--seda); }
+  .filtr .tecka {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--barva); display: inline-block;
+  }
+  .filtr.aktivni { background: var(--text); color: var(--pozadi); border-color: var(--text); }
+  .filtr.aktivni .tecka { background: var(--pozadi); }
+
+  /* ---------- Rubriky a mřížka karet ---------- */
+  .rubrika { margin: 0 0 38px; }
+  .rubrika-titul {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.25rem; font-weight: 700;
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--linka);
+    transition: border-color .45s ease;
+  }
+  .rubrika-titul .tecka {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--barva); display: inline-block; flex-shrink: 0;
+  }
+  .rubrika-pocet {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.75rem; font-weight: 700; color: var(--seda);
+    border: 1px solid var(--okraj); border-radius: 999px;
+    padding: 1px 9px; margin-left: 2px;
+  }
+  .mrizka {
+    display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  }
+  .karta {
+    background: var(--karta); border: 1px solid var(--okraj);
+    border-radius: 16px; padding: 24px;
+    display: flex; flex-direction: column; gap: 11px;
+    transition: background-color .45s ease, border-color .45s ease,
+                box-shadow .2s ease, transform .2s ease, opacity .3s ease;
+  }
+  .karta:hover {
+    box-shadow: 0 10px 30px rgba(0,0,0,.10);
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--barva) 45%, var(--okraj));
+  }
+  body.tmavy .karta:hover { box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .karta--top { position: relative; overflow: hidden; }
+  .karta--top::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--barva),
+      color-mix(in srgb, var(--barva) 25%, transparent));
+  }
+  .stitek {
+    align-self: flex-start; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: color-mix(in srgb, var(--barva) 85%, var(--text));
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--barva) 16%, var(--karta)),
+      color-mix(in srgb, var(--barva) 7%, var(--karta)));
+    border: 1px solid color-mix(in srgb, var(--barva) 22%, var(--karta));
+    border-radius: 999px; padding: 3px 11px;
+    transition: background-color .45s ease, color .45s ease, border-color .45s ease;
+  }
+  body.tmavy .stitek { color: color-mix(in srgb, var(--barva) 55%, white); }
+  .karta h2 { font-size: 1.08rem; line-height: 1.35; letter-spacing: -0.01em; }
+  .karta h2 a { color: inherit; text-decoration: none; }
+  .karta h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .karta p { font-size: 0.92rem; color: var(--odstavec); flex-grow: 1;
+             transition: color .45s ease; }
+  .karta footer {
+    font-size: 0.8rem; color: var(--seda);
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--linka); padding-top: 10px;
+    transition: border-color .45s ease, color .45s ease;
+  }
+  .karta footer .zdroj { font-weight: 600; }
+  .skryta { display: none; }
+
+  /* ---------- Aktuality ---------- */
+  .aktuality, .panel {
+    background: var(--karta); border: 1px solid var(--okraj);
+    border-radius: 16px; padding: 26px 28px; margin: 0 0 34px;
+    transition: background-color .45s ease, border-color .45s ease;
+  }
+  .akt-hlava {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 6px;
+  }
+  .akt-titul {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.25rem; font-weight: 700;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .puls {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #b0413e; flex-shrink: 0;
+    animation: pulzovani 2.2s ease-in-out infinite;
+  }
+  @keyframes pulzovani {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(176,65,62,.35); }
+    50%      { box-shadow: 0 0 0 6px rgba(176,65,62,0); }
+  }
+  .akt-taby {
+    display: inline-flex; border: 1px solid var(--okraj);
+    border-radius: 999px; padding: 3px; background: var(--pozadi);
+    transition: background-color .45s ease, border-color .45s ease;
+  }
+  .akt-tab {
+    border: 0; background: transparent; color: var(--seda);
+    border-radius: 999px; padding: 6px 16px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer;
+    transition: background-color .25s ease, color .25s ease;
+  }
+  .akt-tab.aktivni { background: var(--text); color: var(--pozadi); }
+  .akt {
+    padding: 16px 0; border-bottom: 1px solid var(--linka);
+    transition: border-color .45s ease;
+  }
+  .akt:last-of-type { border-bottom: 0; }
+  .akt h3 { font-size: 1.02rem; line-height: 1.4; letter-spacing: -0.01em; }
+  .akt p { font-size: 0.92rem; color: var(--odstavec); margin-top: 5px;
+           transition: color .45s ease; }
+  .akt-zdroje {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 6px; margin-top: 10px;
+  }
+  .akt-popisek {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--seda); margin-right: 4px;
+  }
+  .zdroj-chip {
+    font-size: 0.78rem; color: var(--odstavec); text-decoration: none;
+    border: 1px solid var(--okraj); background: var(--pozadi);
+    border-radius: 999px; padding: 3px 10px;
+    transition: background-color .25s ease, color .25s ease,
+                border-color .25s ease, transform .15s ease;
+  }
+  .zdroj-chip:hover { border-color: var(--seda); transform: translateY(-1px); }
+  .akt-pager {
+    display: flex; align-items: center; justify-content: center;
+    gap: 14px; padding-top: 14px;
+  }
+  .akt-sipka {
+    border: 1px solid var(--okraj); background: var(--pozadi); color: var(--text);
+    width: 32px; height: 32px; border-radius: 50%; font-size: 1.05rem;
+    cursor: pointer; line-height: 1;
+    transition: background-color .25s ease, border-color .25s ease,
+                opacity .25s ease, transform .15s ease;
+  }
+  .akt-sipka:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--seda); }
+  .akt-sipka:disabled { opacity: .35; cursor: default; }
+  .akt-stranka { font-size: 0.82rem; color: var(--seda); min-width: 44px; text-align: center; }
+
+  /* ---------- Stránka Data: kalendář ---------- */
+  .udalost {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 13px 0; border-bottom: 1px solid var(--linka);
+    transition: border-color .45s ease;
+  }
+  .udalost:last-child { border-bottom: 0; }
+  .udalost-datum {
+    flex-shrink: 0; width: 110px; text-align: right;
+    font-size: 0.78rem; font-weight: 700; color: var(--seda);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding-top: 3px; font-variant-numeric: tabular-nums;
+  }
+  .udalost-nazev { font-size: 0.95rem; }
+
+  /* ---------- Stránka Data: ukazatele s grafy ---------- */
+  .sekce-titul {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.25rem; font-weight: 700; margin: 0 0 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ukazatele {
+    display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    margin-bottom: 34px;
+  }
+  .ukazatel {
+    background: var(--karta); border: 1px solid var(--okraj);
+    border-radius: 16px; padding: 20px 22px 16px;
+    transition: background-color .45s ease, border-color .45s ease,
+                box-shadow .2s ease, transform .2s ease;
+  }
+  .ukazatel:hover { box-shadow: 0 10px 30px rgba(0,0,0,.08); transform: translateY(-2px); }
+  body.tmavy .ukazatel:hover { box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+  .ukazatel-nazev {
+    font-size: 0.76rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--seda); margin-bottom: 6px;
+  }
+  .ukazatel-radek { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .ukazatel-hodnota {
+    font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .zmena { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .zmena.nahoru { color: #1d7a4f; }
+  .zmena.dolu { color: #b0413e; }
+  body.tmavy .zmena.nahoru { color: #4cc38a; }
+  body.tmavy .zmena.dolu { color: #e5726f; }
+  .graf-obal { position: relative; margin-top: 12px; }
+  .graf { width: 100%; height: 84px; display: block; color: var(--graf); }
+  .graf-tip {
+    position: absolute; pointer-events: none; display: none; z-index: 2;
+    background: var(--text); color: var(--pozadi);
+    font-size: 0.72rem; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: 3px 9px; border-radius: 6px; white-space: nowrap;
+    transform: translate(-50%, -135%);
+    box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  }
+  .graf-svisla {
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: var(--seda); opacity: .55; display: none; pointer-events: none;
+  }
+  .graf-tecka {
+    position: absolute; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--graf); border: 2px solid var(--karta);
+    transform: translate(-50%, -50%); display: none; pointer-events: none;
+  }
+  .graf-cara { fill: none; stroke: currentColor; stroke-width: 2; }
+  .graf-plocha { fill: currentColor; opacity: .10; }
+  .graf-popisky {
+    display: flex; justify-content: space-between;
+    font-size: 0.72rem; color: var(--seda); margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .rozsahy { display: flex; gap: 6px; margin-top: 12px; }
+  .rozsah {
+    border: 1px solid var(--okraj); background: transparent; color: var(--seda);
+    border-radius: 8px; padding: 3px 10px; font-size: 0.75rem;
+    font-weight: 600; cursor: pointer;
+    transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+  }
+  .rozsah.aktivni { background: var(--text); color: var(--pozadi); border-color: var(--text); }
+  .rozsah:not(.aktivni):hover { color: var(--text); border-color: var(--seda); }
+  .ukazatel { position: relative; }
+  .skryj {
+    position: absolute; top: 10px; right: 12px;
+    border: 0; background: transparent; color: var(--seda);
+    font-size: 1.1rem; line-height: 1; cursor: pointer;
+    opacity: 0; transition: opacity .2s ease, color .2s ease;
+  }
+  .ukazatel:hover .skryj { opacity: .7; }
+  .skryj:hover { opacity: 1 !important; color: #b0413e; }
+  .skryte-obal {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin: -14px 0 20px;
+  }
+  .skryty-chip {
+    border: 1px dashed var(--okraj); background: transparent;
+    color: var(--seda); border-radius: 999px; padding: 4px 12px;
+    font-size: 0.8rem; cursor: pointer;
+    transition: color .2s ease, border-color .2s ease;
+  }
+  .skryty-chip:hover { color: var(--text); border-color: var(--seda); }
+  .tip-pridani { font-size: 0.8rem; color: var(--seda); margin: -8px 0 26px; }
+
+  /* ---------- Jazykové verze ---------- */
+  .l-en { display: none; }
+  body.anglicky .l-en { display: inline; }
+  body.anglicky .l-cs { display: none; }
+
+  @media (max-width: 560px) {
+    header.hlavicka { padding-top: 84px; }
+    .prepinace { top: 16px; right: 0; }
+    .udalost-datum { width: 84px; }
+  }
+</style>
+</head>
+<body>
+<div class="obal" id="obal">
+  <div class="prepinace">
+    <button class="prepinac" id="jazyk" title="Switch language">EN</button>
+    <button class="prepinac" id="rezim" title="Tmavý/světlý režim">🌙</button>
+  </div>
+  <header class="hlavicka">
+    <div class="nadtitulek"><span class="l-cs">Osobní výběr</span><span class="l-en">Personal briefing</span></div>
+    <h1><span class="l-cs">Můj přehled zpráv</span><span class="l-en">My News Digest</span></h1>
+    <div class="cas"><span class="l-cs">Vygenerováno</span><span class="l-en">Generated</span> 2026-07-06 01:03</div>
+  </header>
+  <nav class="stranky">
+    <div class="stranky-vnitrek">
+      <a class="stranka aktivni" href="index.html"><span class="l-cs">Zprávy</span><span class="l-en">News</span></a>
+      <a class="stranka" href="data.html"><span class="l-cs">Data</span><span class="l-en">Data</span></a>
+    </div>
+  </nav>
+
+  <section class="aktuality">
+    <div class="akt-hlava">
+      <h2 class="akt-titul"><span class="puls"></span><span class="l-cs">Aktuality · posledních 24 hodin</span><span class="l-en">Breaking · last 24 hours</span></h2>
+      <div class="akt-taby">
+        <button class="akt-tab aktivni" data-oblast="svet"><span class="l-cs">Svět</span><span class="l-en">World</span></button>
+        <button class="akt-tab" data-oblast="cr"><span class="l-cs">Česko</span><span class="l-en">Czechia</span></button>
+      </div>
+    </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Turecko hostí první summit NATO po 22 letech, policie zatkla přes sto demonstrantů</span><span class="l-en">Turkey hosts first NATO summit in 22 years as police arrest over 100 protesters</span></h3>
+        <p><span class="l-cs">Turecko od 7. července hostí první summit NATO na svém území po 22 letech. V Ankaře policie kvůli protestům proti summitu zatkla přes sto lidí, mezi zadrženými jsou i novináři. Šéf aliance Mark Rutte uvedl, že zbrojní firmy se snaží stíhat rostoucí poptávku, jak členské státy řeší přechod od financí k výrobě munice.</span><span class="l-en">Turkey is hosting its first NATO summit on its soil in 22 years, starting July 7. Turkish police have arrested more than 100 people, including journalists, at protests against the summit. NATO chief Mark Rutte said defense contractors are trying to keep pace with rising demand as the alliance shifts from funding to production capacity.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.aljazeera.com/video/newsfeed/2026/7/5/turkiye-gears-up-for-its-first-nato-summit-in-22-years?traffic_source=rss" target="_blank" rel="noopener">Al Jazeera</a><a class="zdroj-chip" href="https://www.seznamzpravy.cz/clanek/zahranicni-urady-na-turecke-demonstraci-proti-summitu-nato-zatkly-pres-sto-lidi-310151" target="_blank" rel="noopener">Seznam Zprávy</a><a class="zdroj-chip" href="https://www.wsj.com/world/nato-is-fixing-its-cash-flow-problem-now-it-needs-to-turn-money-into-munitions-1440bd35" target="_blank" rel="noopener">WSJ World</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Írán pohřbívá Chameneího, syn nejvyššího vůdce se od útoku neukázal</span><span class="l-en">Iran buries Khamenei as supreme leader&#x27;s son stays out of public eye</span></h3>
+        <p><span class="l-cs">V Teheránu probíhají šestidenní pohřební obřady za bývalého nejvyššího vůdce Íránu ajatolláha Alího Chameneího, zabitého při útoku na počátku války s USA a Izraelem; úřady očekávají účast až 20 milionů lidí. Jeho syn Modžtaba, možný nástupce, se od útoku neobjevil na veřejnosti, což vyvolává otázky o dalším směřování íránského vedení. Pohřeb zároveň ukazuje, jak výrazně se íránský režim po konfliktu proměnil.</span><span class="l-en">Tehran is holding six days of funeral ceremonies for former Supreme Leader Ayatollah Ali Khamenei, killed in an attack at the start of the war with the US and Israel, with authorities expecting up to 20 million attendees. His son Mojtaba, a possible successor, hasn&#x27;t appeared in public since the attack, raising questions about Iran&#x27;s future leadership. The funeral underscores how much Iran&#x27;s regime has changed since the conflict.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.bbc.co.uk/news/articles/cevllyj9vv3o?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">BBC World</a><a class="zdroj-chip" href="https://www.wsj.com/world/middle-east/iran-supreme-leader-khamenei-funeral-7e1ad603" target="_blank" rel="noopener">WSJ World</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Počet obětí zemětřesení ve Venezuele stoupl na 3342</span><span class="l-en">Venezuela earthquake death toll climbs to 3,342</span></h3>
+        <p><span class="l-cs">Dvojice zemětřesení, která zasáhla sever Venezuely 24. června, si podle úřadů vyžádala už 3342 obětí a čísla dál rostou. Prozatímní prezidentka odmítá kritiku pomalé záchranné reakce a slibuje, že země nesklouzne do nepokojů, ačkoli mezi obyvateli sílí hněv na vládu podporovanou USA. Na místě zasahoval i český tým záchranářů, který prohledal kolem čtyřiceti budov.</span><span class="l-en">The twin earthquakes that struck northern Venezuela on June 24 have killed 3,342 people according to authorities, with the toll still rising. The interim president has defended the emergency response and vowed the country won&#x27;t descend into unrest, despite growing public anger at the US-backed government. A Czech rescue team was among those on the ground, searching around 40 buildings.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.theguardian.com/world/2026/jul/05/rodriguez-defends-venezuelas-emergency-earthquake-response-as-bodies-expected-to-soar" target="_blank" rel="noopener">The Guardian World</a><a class="zdroj-chip" href="https://www.aljazeera.com/news/longform/2026/7/5/how-a-son-rescued-his-father-from-the-rubble-of-venezuelas-earthquakes?traffic_source=rss" target="_blank" rel="noopener">Al Jazeera</a><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/pocet-obeti-dvou-zemetreseni-ve-venezuele-vzrostl-podle-uradu-na-3342/2846868?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK hlavní zprávy</a><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/cesti-zachranari-ve-venezuele-prohledavali-kolem-40-budov/2847543?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK domácí</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Rusko verbuje do války i studenty, Zelenskyj varuje před novým masivním útokem</span><span class="l-en">Russia recruits students for war as Zelensky warns of new massive attack</span></h3>
+        <p><span class="l-cs">Podle svědectví sílí v Rusku praktiky nuceného podepisování vojenských kontraktů a do bojů na Ukrajině jsou nově lákáni i studenti bez základního výcviku, což může signalizovat potíže Moskvy s doplňováním ztrát. Ukrajinský prezident Zelenskyj večer oznámil, že Rusko podle zpravodajských informací chystá další rozsáhlý útok na Ukrajinu, a vyzval spojence k urychlení dodávek protivzdušných střel.</span><span class="l-en">Testimonies point to a rise in forced military contract signings in Russia, with students now being recruited without basic training - a possible sign Moscow is struggling to replace losses. Ukrainian President Zelensky said intelligence indicates Russia is preparing another large-scale attack on Ukraine, urging allies to speed up deliveries of air defense missiles.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.seznamzpravy.cz/clanek/zahranicni-rusko-nuti-do-boje-a-verbuje-uz-i-studenty-310123" target="_blank" rel="noopener">Seznam Zprávy</a><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/zelenskyj-rusko-chysta-dalsi-rozsahly-utok-na-ukrajinu/2847662?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK hlavní zprávy</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">EasyJet míří pod americkou kontrolu, Castlelake nabízí 147 miliard korun</span><span class="l-en">EasyJet heads toward US ownership as Castlelake offers £5.5bn</span></h3>
+        <p><span class="l-cs">Britská nízkonákladová aerolinka easyJet po odmítnutí čtyř dřívějších nabídek nyní v zásadě souhlasí s převzetím americkou investiční společností Castlelake za 6,90 libry na akcii, tedy zhruba 5,23 miliardy liber (147 miliard korun). Vedení firmy nabídku doporučí akcionářům ke schválení, čímž by se největší britský nízkonákladový dopravce dostal do soukromých rukou.</span><span class="l-en">British budget airline easyJet has agreed in principle to a takeover by US investment firm Castlelake at 6.90 pounds per share - about £5.23bn (roughly 147 billion CZK) - after rejecting four earlier offers. Management will recommend the deal to shareholders, which would take Britain&#x27;s biggest low-cost carrier private.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.bbc.co.uk/news/articles/cgjxx7ngz51o?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">BBC Business</a><a class="zdroj-chip" href="https://www.theguardian.com/business/2026/jul/05/easyjet-agrees-to-5bn-takeover-by-us-investment-firm" target="_blank" rel="noopener">The Guardian Business</a><a class="zdroj-chip" href="https://www.e15.cz/byznys/doprava-a-logistika/easyjet-miri-k-prevzeti-americky-investor-zvysil-nabidku-na-147-miliard-korun-1434100" target="_blank" rel="noopener">E15</a><a class="zdroj-chip" href="https://www.seznamzpravy.cz/clanek/ekonomika-easyjet-doporuci-akcionarum-prijmout-miliardovou-nabidku-castlelake-310147" target="_blank" rel="noopener">Seznam Zprávy</a><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/aerolinky-easyjet-v-zasade-souhlasi-s-nabidkou-na-prevzeti-od-firmy-castlelake/2847660?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK hlavní zprávy</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">AMD a Intel v první polovině roku předstihly Nvidii, čipové akcie čekal propad</span><span class="l-en">AMD and Intel outpaced Nvidia in first half as chip stocks slumped</span></h3>
+        <p><span class="l-cs">Podle analýzy si akcie AMD a Intelu v první polovině roku vedly lépe než Nvidia, což narušuje dosavadní žebříček vítězů AI boomu na burze. Čipové tituly navíc před svátky zažily výprodej, který analytici přirovnávají k podobným výkyvům z minulosti. Otázkou zůstává, zda si Nvidia dokáže pozici v druhé polovině roku vylepšit.</span><span class="l-en">AMD and Intel shares outperformed Nvidia in the first half of the year, according to analysis, shaking up the leaderboard of AI-boom stock winners. Chip stocks also suffered a pre-holiday sell-off that analysts compare to past slumps. It remains to be seen whether Nvidia can improve its standing in the second half.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://finance.yahoo.com/markets/stocks/articles/amd-stock-intel-crushed-nvidia-223000800.html" target="_blank" rel="noopener">Yahoo Finance</a><a class="zdroj-chip" href="https://www.cnbc.com/2026/07/05/jim-cramer-what-caused-the-pre-holiday-chip-stock-slump-and-what-to-do-about-it.html" target="_blank" rel="noopener">CNBC</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">OpenAI zřejmě nenavštívilo klíčové místo pro britský datacentrový projekt Stargate</span><span class="l-en">OpenAI apparently never visited key site for UK&#x27;s Stargate datacenter project</span></h3>
+        <p><span class="l-cs">Investigace The Guardian zjistila, že z avizovaných 20 miliard liber britské části projektu Stargate UK, který měl být největší investicí OpenAI ve Velké Británii, se zatím jedná spíš o hypotetický plán - firma podle všeho ani nenavštívila klíčovou lokalitu. Projekt byl v dubnu pozastaven, což vyvolává pochybnosti o tom, zda britská vláda prezentovala investici přesně.</span><span class="l-en">A Guardian investigation found that £20bn of the touted £30bn Stargate UK datacenter project - meant to be OpenAI&#x27;s biggest UK undertaking - appears to have been hypothetical, with the company apparently never even visiting the key site. The project was paused in April, raising questions about how UK ministers presented the investment.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.theguardian.com/technology/2026/jul/04/openai-apparent-failure-visit-key-site-questions-stargate-uk-project" target="_blank" rel="noopener">The Guardian Business</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Babiš a Pavel odletí na summit NATO zvlášť, spor o delegaci pokračuje</span><span class="l-en">Babiš and Pavel to fly to NATO summit separately as delegation dispute continues</span></h3>
+        <p><span class="l-cs">Vládní delegace v čele s premiérem Andrejem Babišem odletí v úterý ráno na summit NATO krátce před prezidentem Petrem Pavlem, přičemž spor mezi vládou a Hradem o složení a program delegace trvá i těsně před odletem. Babiš předem avizoval, že Česko může na summitu čelit kritice za neplnění závazků aliance. Jednání vyvrcholí ve středu zasedáním Severoatlantické rady.</span><span class="l-en">The government delegation led by PM Andrej Babiš will fly to the NATO summit on Tuesday morning shortly before President Petr Pavel, with the dispute between the government and the presidential office over the delegation&#x27;s composition and program still unresolved. Babiš warned Czechia could face criticism at the summit for not meeting alliance commitments; talks culminate Wednesday with the North Atlantic Council meeting.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.e15.cz/domaci/politika/babis-a-pavel-miri-na-summit-nato-zvlast-spor-o-ceskou-delegaci-pokracuje-i-pred-odletem-1434091" target="_blank" rel="noopener">E15</a><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/babis-udajne-dostaneme-na-summitu-nato-sodu-ze-neplnime/2847564?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK domácí</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Meziroční inflace v květnu dál zpomalila</span><span class="l-en">Czech annual inflation slowed further in May</span></h3>
+        <p><span class="l-cs">Podle ČSÚ se meziroční růst spotřebitelských cen v květnu dále zmírnil, což potvrzuje trend zvolňující se inflace v české ekonomice. Data budou důležitým vstupem pro rozhodování ČNB o nastavení úrokových sazeb na příštích zasedáních bankovní rady. Nižší inflace zároveň ulevuje domácnostem i firmám při plánování výdajů a investic.</span><span class="l-en">Czech consumer price growth eased further in May year-on-year, according to the Czech Statistical Office, confirming a slowing inflation trend. The data will be a key input for the Czech National Bank&#x27;s upcoming interest rate decisions. Lower inflation also eases the burden on households and businesses planning spending and investment.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://csu.gov.cz/rychle-informace/indexy-spotrebitelskych-cen-inflace-kveten-2026" target="_blank" rel="noopener">ČSÚ rychlé informace</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Minimální mzda by od ledna mohla vzrůst o 2500 Kč na 24 900 Kč</span><span class="l-en">Minimum wage could rise by 2,500 CZK to 24,900 CZK from January</span></h3>
+        <p><span class="l-cs">Podle odhadů Ministerstva práce a sociálních věcí by se minimální mzda mohla od ledna zvýšit o 2500 korun na 24 900 korun, v roce 2028 by pak mohla dosáhnout 26 900 korun. Návrh vychází z podkladů k připravovanému vládnímu nařízení a dotkl by se stovek tisíc zaměstnanců s nejnižšími příjmy.</span><span class="l-en">According to Labor Ministry estimates, the minimum wage could rise by 2,500 CZK to 24,900 CZK from January, reaching 26,900 CZK by 2028. The proposal, part of a forthcoming government decree, would affect hundreds of thousands of the lowest-paid workers, with final approval still pending.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/mpsv-minimalni-mzda-by-mohla-od-ledna-dle-odhadu-vzrust-o-2500-kc-na-24900-kc/2847521?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK domácí</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">OPEC+ popáté zvyšuje těžbu ropy, glut oslabuje pozici Íránu</span><span class="l-en">OPEC+ hikes oil output for fifth month, glut weakens Iran&#x27;s leverage</span></h3>
+        <p><span class="l-cs">Kartel OPEC+ v neděli potvrdil už pátý po sobě jdoucí nárůst produkce ropy a pokračuje tak v rušení dřívějších škrtů; krok je zatím spíše symbolický, dokud se plně neobnoví provoz v Hormuzském průlivu. Levnější a hojnější ropa navíc umožňuje zemím rychleji doplnit zásoby a snižuje pákový efekt, který mohl Írán uplatňovat v jednáních přes kontrolu Hormuzu.</span><span class="l-en">OPEC+ confirmed its fifth consecutive production increase on Sunday, continuing to unwind earlier cuts, though the move remains largely symbolic until traffic through the Strait of Hormuz fully recovers. Cheaper, more plentiful crude lets countries refill stockpiles faster and undercuts Iran&#x27;s leverage tied to Hormuz.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.wsj.com/business/energy-oil/opec-allies-hike-output-again-as-hormuz-traffic-starts-recovering-0094a1a4" target="_blank" rel="noopener">WSJ World</a><a class="zdroj-chip" href="https://www.wsj.com/finance/commodities-futures/a-sudden-glut-of-oil-threatens-to-weaken-irans-hand-in-talks-adfcf7c0?mod=rss_markets_main" target="_blank" rel="noopener">WSJ Markets</a><a class="zdroj-chip" href="https://www.marketwatch.com/story/opec-raises-output-levels-again-despite-tumbling-crude-prices-534791c8?mod=mw_rss_topstories" target="_blank" rel="noopener">MarketWatch</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Wall Street pokračuje v růstu, akciové fondy za kvartál posílily o 17 %</span><span class="l-en">Wall Street set to extend rally as stock funds gained 17% for the quarter</span></h3>
+        <p><span class="l-cs">Americké akciové futures v neděli rostly a trhy navazují na zisky z minulého týdne po prodlouženém víkendu. Akciové fondy si podle WSJ za uplynulé čtvrtletí připsaly v průměru 17,1 %, k čemuž přispěla vlna IPO, válečná rallye i nová podoba Fedu. Investoři nyní sledují, zda momentum vydrží i v červenci, který bývá podle analytiků volatilnější.</span><span class="l-en">US stock futures rose Sunday as Wall Street looked to extend last week&#x27;s gains after the holiday weekend. Stock funds returned an average of 17.1% over the quarter, driven by an IPO wave, a war rally and a reshaped Fed, according to the WSJ. Investors are now watching whether the momentum holds through July, a month typically prone to more volatility.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.wsj.com/finance/investing/stocks-q2-2026-look-back-4b7f8c7d?mod=rss_markets_main" target="_blank" rel="noopener">WSJ Markets</a><a class="zdroj-chip" href="https://www.marketwatch.com/story/u-s-stock-futures-rise-as-wall-street-looks-to-extend-its-rally-coming-off-the-holiday-weekend-5e5a9102?mod=mw_rss_topstories" target="_blank" rel="noopener">MarketWatch</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Čína propustila zakladatele podzemní církve Ezru Jina po tlaku Trumpa</span><span class="l-en">China releases underground church founder Ezra Jin after Trump&#x27;s pressure</span></h3>
+        <p><span class="l-cs">Ezra Jin, zakladatel čínské podzemní Zion Church, byl propuštěn z vězení a v pátek dorazil do Los Angeles, kde se spojil s rodinou. K jeho propuštění došlo po přímé žádosti Donalda Trumpa adresované Si Ťin-pchingovi. Případ je dalším příkladem, jak Peking reaguje na americký diplomatický tlak v otázkách náboženské svobody.</span><span class="l-en">Ezra Jin, founder of China&#x27;s prominent underground Zion Church, was released from prison and arrived in Los Angeles on Friday to reunite with his family. His release followed a direct appeal from Donald Trump to Xi Jinping. The case is another example of Beijing responding to US diplomatic pressure on religious freedom issues.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.bbc.co.uk/news/articles/c4gy51ky75vo?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener">BBC World</a><a class="zdroj-chip" href="https://www.theguardian.com/world/2026/jul/05/founder-of-prominent-underground-church-released-from-prison-in-china" target="_blank" rel="noopener">The Guardian World</a><a class="zdroj-chip" href="https://www.wsj.com/world/china/china-releases-imprisoned-pastor-ezra-jin-after-u-s-pressure-340d6d08" target="_blank" rel="noopener">WSJ World</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Súdán: dronové útoky zabily přes 20 lidí v obleženém El Obeidu</span><span class="l-en">Sudan: drone strikes kill over 20 in besieged city of El Obeid</span></h3>
+        <p><span class="l-cs">Město El Obeid se stalo klíčovým bojištěm války mezi súdánskou armádou a paramilitantními jednotkami RSF; víkendové dronové útoky na školy a čerpací stanice byly podle humanitárních pracovníků dosud nejprudší a zabily více než 20 lidí, včetně studentů. Civilisté v obležení zůstávají odříznuti od základních služeb.</span><span class="l-en">The city of El Obeid has become a key battleground in Sudan&#x27;s war between the army and the paramilitary RSF, with this weekend&#x27;s drone strikes on schools and fuel stations described by aid workers as the most violent yet, killing more than 20 people including students. Civilians remain besieged and cut off from basic services.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.theguardian.com/world/2026/jul/04/el-obeid-aid-workers-sudan-war-drone-strikes" target="_blank" rel="noopener">The Guardian World</a></div>
+      </div>
+      <div class="akt" data-oblast="svet">
+        <h3><span class="l-cs">Nákladní loď v Rudém moři nahlásila útok, britský námořní úřad varuje</span><span class="l-en">Cargo vessel reports attack in Red Sea, UK maritime body warns</span></h3>
+        <p><span class="l-cs">Britský námořní bezpečnostní úřad UKMTO oznámil, že nákladní loď v Rudém moři nahlásila útok - incident se odehrál na jedné z nejdůležitějších světových obchodních tras uprostřed křehkého příměří mezi Íránem a USA. Zpráva zvyšuje obavy o bezpečnost lodní dopravy v regionu navzdory nadějím na uklidnění po konfliktu.</span><span class="l-en">The UK&#x27;s maritime security body UKMTO said a cargo vessel came under attack in the Red Sea, one of the world&#x27;s most critical trade routes, amid a fragile ceasefire between Iran and the US. The incident raises fresh concerns about shipping safety in the region despite hopes the conflict had eased.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.cnbc.com/2026/07/05/cargo-vessel-in-red-sea-reports-attack-uk-maritime-body-says.html" target="_blank" rel="noopener">CNBC</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Schodek veřejných financí 3,5 % HDP, nezaměstnanost klesla na 3,2 %</span><span class="l-en">Public finance deficit at 3.5% of GDP, unemployment falls to 3.2%</span></h3>
+        <p><span class="l-cs">Český statistický úřad zveřejnil sadu makroekonomických dat: sektor vládních institucí hospodařil v prvním čtvrtletí se schodkem 3,5 % HDP, míra nezaměstnanosti v květnu činila 3,2 % a příjmy domácností meziročně vzrostly o 3,2 %.</span><span class="l-en">The Czech Statistical Office released a batch of macroeconomic data: the government sector ran a deficit of 3.5% of GDP in Q1, unemployment stood at 3.2% in May, and household incomes rose 3.2% year-on-year.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://csu.gov.cz/rychle-informace/deficit-a-dluh-vladnich-instituci-1-ctvrtleti-2026" target="_blank" rel="noopener">ČSÚ rychlé informace</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Uber odkládá vlastní expanzi Uber Eats do Česka kvůli boji o Delivery Hero</span><span class="l-en">Uber delays its own Uber Eats expansion to Czechia amid battle for Delivery Hero</span></h3>
+        <p><span class="l-cs">Uber podle Financial Times pozastavil většinu plánovaného rozšíření služby Uber Eats v Evropě, které mělo od února zahrnout i sedm nových zemí včetně Česka, a soustředí se místo toho na snahu převzít konkurenční německou firmu Delivery Hero. Firma podle svých vyjádření od organické expanze zcela neustupuje, plány jen odsouvá.</span><span class="l-en">Uber has paused most of its planned Uber Eats expansion in Europe - which was to include seven new countries including Czechia starting in February - to focus instead on its attempt to acquire German rival Delivery Hero, according to the Financial Times. The company says it isn&#x27;t abandoning organic expansion entirely, just postponing it.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://byznys.hn.cz/c1-67900940-vlastni-expanze-uberu-do-ceska-se-nekona-firma-podle-ft-nevzdava-prevzeti-velkeho-konkurenta" target="_blank" rel="noopener">HN Byznys</a><a class="zdroj-chip" href="https://www.e15.cz/byznys/obchod-a-sluzby/uber-eats-odklada-navrat-do-ceska-evropskou-expanzi-brzdi-souboj-o-delivery-hero-1434092" target="_blank" rel="noopener">E15</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">AI a hybridní práce mění podobu českých kanceláří</span><span class="l-en">AI and hybrid work reshape Czech office space</span></h3>
+        <p><span class="l-cs">Firmy v Česku už při plánování kancelářských prostor nepočítají s automatickým růstem počtu zaměstnanců a místo řad pracovních stolů budují prostory pro spolupráci a soustředění. Umělá inteligence spolu s hybridní prací tak mění nejen způsob práce, ale i podobu celého kancelářského trhu a poptávku po komerčních nemovitostech.</span><span class="l-en">Czech companies no longer plan office space around automatic headcount growth, replacing rows of desks with areas for collaboration and focused work. AI combined with hybrid work is reshaping not just how people work but also the commercial real estate market&#x27;s demand for offices.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.e15.cz/byznys/reality-a-stavebnictvi/ai-a-hybridni-prace-meni-kancelare-firmy-zmensuji-prostory-a-sazeji-na-flexibilitu-1433711" target="_blank" rel="noopener">E15</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Počet obyvatel Česka poprvé klesl pod 10,9 milionu</span><span class="l-en">Czech population falls below 10.9 million for the first time</span></h3>
+        <p><span class="l-cs">Podle čtvrtletních dat ČSÚ počet obyvatel České republiky klesl pod hranici 10,9 milionu. Jde o demografický ukazatel, který dlouhodobě souvisí s vývojem porodnosti, úmrtnosti a migrace a má dopad na plánování důchodového systému i trhu práce.</span><span class="l-en">Quarterly data from the Czech Statistical Office shows the country&#x27;s population has dropped below 10.9 million. The demographic trend, tied to birth, death and migration rates, has implications for pension system planning and the labor market.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://csu.gov.cz/rychle-informace/pohyb-obyvatelstva-1-ctvrtleti-2026" target="_blank" rel="noopener">ČSÚ rychlé informace</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Senát může prodloužit lhůtu pro žádosti o kompenzaci za zaniklé penzijní spoření</span><span class="l-en">Senate may extend deadline for pension compensation claims</span></h3>
+        <p><span class="l-cs">Hospodářský výbor Senátu doporučil prodloužit na dvojnásobek půlroční lhůtu, ve které mohou důchodci žádat o státní příspěvek za zaniklé penzijní spoření. Novela by se tak měla stát vstřícnější k lidem, kteří o odškodnění dosud nepožádali; o konečné podobě zákona rozhodne hlasování v Senátu.</span><span class="l-en">The Senate&#x27;s economic committee has recommended doubling the six-month deadline for pensioners to apply for state compensation over defunct pension savings schemes. The amendment aims to be more accommodating to those who haven&#x27;t yet applied, with a final Senate vote still pending.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/senat-mozna-upravi-novelu-o-kompenzaci-duchodcu-za-zanikle-penzijni-sporeni/2847553?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK domácí</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Obrat audiovizuálního průmyslu v Česku loni vzrostl o 14,5 % na 11,3 miliardy</span><span class="l-en">Czech audiovisual industry revenue grew 14.5% to 11.3 billion CZK last year</span></h3>
+        <p><span class="l-cs">Podle Asociace producentů obrat audiovizuálního průmyslu v ČR v roce 2025 meziročně stoupl o 14,5 procenta na 11,3 miliardy korun, k čemuž přispěly zejména vyšší filmové pobídky. Sektor tak navazuje na dlouhodobý růstový trend, který dělá z Česka oblíbenou lokaci pro zahraniční produkce.</span><span class="l-en">Revenue in the Czech audiovisual industry rose 14.5% year-on-year in 2025 to 11.3 billion CZK, driven largely by higher film incentives, according to the Producers Association. The sector continues a long-term growth trend that has made Czechia a popular location for foreign productions.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/obrat-audiovizualniho-prumyslu-v-cr-se-v-roce-2025-zvysil-o-145-pct-na-113-mld/2847547?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK domácí</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Kamion havaroval u Dobříše a visel z mostu, D4 byla hodiny uzavřená</span><span class="l-en">Truck crashes near Dobříš and dangles from bridge, closing D4 highway for hours</span></h3>
+        <p><span class="l-cs">Na dálnici D4 u Dobříše havaroval kamion, jehož řidič usnul za volantem a vjel do úseku uzavřeného kvůli opravě mostu; vozidlo po nehodě částečně viselo z mostu. Dálnice byla kvůli zásahu záchranných složek obousměrně uzavřená, řidič skončil v šoku v péči záchranářů.</span><span class="l-en">A truck crashed on the D4 highway near Dobříš after its driver fell asleep at the wheel and entered a section closed for bridge repairs, leaving the vehicle partially hanging off the bridge. The highway was closed in both directions during the emergency response, with the shocked driver taken into paramedics&#x27; care.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/u-dobrise-havaroval-kamion-a-castecne-visel-z-mostu-d4-byla-obousmerne-uzavrena/2847650?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK hlavní zprávy</a><a class="zdroj-chip" href="https://www.ceskenoviny.cz/zpravy/u-dobrise-havaroval-kamion-a-castecne-visel-z-mostu-d4-byla-obousmerne-uzavrena/2847650?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener">ČTK domácí</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Česko propadlo v žebříčku podílu obnovitelných zdrojů v EU</span><span class="l-en">Czechia ranks near the bottom of EU renewable energy league table</span></h3>
+        <p><span class="l-cs">Podle nového srovnání zemí EU podle podílu obnovitelných zdrojů na výrobě elektřiny se Česko umístilo mezi nejhoršími státy unie, hůř je na tom už jen jedna malá země. Výsledek podtrhuje pomalý postup české energetické transformace a může zkomplikovat plnění klimatických závazků vůči Bruselu.</span><span class="l-en">A new comparison of EU countries by the share of renewables in electricity production places Czechia near the bottom, ahead of just one small state. The result highlights the slow pace of the country&#x27;s energy transition and could complicate meeting climate commitments to Brussels.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.e15.cz/byznys/prumysl-a-energetika/cesko-totalne-pohorelo-v-zebricku-zelene-energie-hure-je-na-tom-uz-jen-jeden-maly-stat-1434007" target="_blank" rel="noopener">E15</a></div>
+      </div>
+      <div class="akt skryta" data-oblast="cr">
+        <h3><span class="l-cs">Téměř polovina českých domácností nemá finanční rezervu na tři měsíce</span><span class="l-en">Nearly half of Czech households lack a three-month financial buffer</span></h3>
+        <p><span class="l-cs">Přestože se Češi tradičně považují za spořivý národ, realita je jiná - téměř polovina domácností nemá rezervu na víc než tři měsíce výdajů. Systém zároveň nutí obce blokovat na účtech stovky miliard korun a pomalu klesají i firemní investice, což ukazuje na širší opatrnost v české ekonomice.</span><span class="l-en">Despite the Czechs&#x27; reputation as savers, nearly half of households don&#x27;t have reserves to cover more than three months of expenses. The system also forces municipalities to keep hundreds of billions of crowns locked in accounts, while corporate investment is slowly declining - signs of broader caution in the Czech economy.</span></p>
+        <div class="akt-zdroje"><span class="akt-popisek"><span class="l-cs">Zdroje</span><span class="l-en">Sources</span></span><a class="zdroj-chip" href="https://www.seznamzpravy.cz/clanek/ekonomika-finance-sporive-cesko-kdo-nejvic-usetri-a-proc-drzi-obce-stovky-miliard-310002" target="_blank" rel="noopener">Seznam Zprávy</a></div>
+      </div>
+    <div class="akt-pager" id="akt-pager">
+      <button class="akt-sipka" id="akt-zpet" aria-label="Předchozí">‹</button>
+      <span class="akt-stranka" id="akt-stranka">1 / 1</span>
+      <button class="akt-sipka" id="akt-dal" aria-label="Další">›</button>
+    </div>
+  </section>
+  <nav class="filtry">
+    <button class="filtr aktivni" data-tema="vse"><span class="l-cs">Vše</span><span class="l-en">All</span></button>
+    <button class="filtr" data-tema="akcie" style="--barva:#1d5c4d"><span class="tecka"></span><span class="l-cs">akcie</span><span class="l-en">Stocks</span></button>
+    <button class="filtr" data-tema="AI" style="--barva:#5d4870"><span class="tecka"></span><span class="l-cs">AI</span><span class="l-en">AI</span></button>
+    <button class="filtr" data-tema="ekonomika" style="--barva:#2c4a6e"><span class="tecka"></span><span class="l-cs">ekonomika</span><span class="l-en">Economy</span></button>
+    <button class="filtr" data-tema="česká ekonomika" style="--barva:#7d3c46"><span class="tecka"></span><span class="l-cs">česká ekonomika</span><span class="l-en">Czech economy</span></button>
+  </nav>
+  <section class="rubrika" data-tema="akcie" style="--barva:#1d5c4d">
+    <h2 class="rubrika-titul"><span class="tecka"></span><span class="l-cs">akcie</span><span class="l-en">Stocks</span><span class="rubrika-pocet">6</span></h2>
+    <div class="mrizka">
+      <article class="karta" data-tema="akcie" style="--barva:#1d5c4d">
+        <h2><a href="https://www.cnbc.com/2026/07/05/jim-cramer-what-caused-the-pre-holiday-chip-stock-slump-and-what-to-do-about-it.html" target="_blank" rel="noopener"><span class="l-cs">Čipové akcie před svátky oslabily, analytici varují před opakováním starého scénáře</span><span class="l-en">What caused the pre-holiday chip stock slump and what to do about it</span></a></h2>
+        <p><span class="l-cs">Sektor čipových firem zažil před prázdninami výrazný propad, který připomíná dřívější výprodeje. Analytici radí investorům, jak se v podobné situaci zachovat.</span><span class="l-en">Chip stocks suffered a notable pre-holiday decline that echoes past sell-offs in the sector. Analysts offer advice on how investors should respond.</span></p>
+        <footer><span class="zdroj">CNBC</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="akcie" style="--barva:#1d5c4d">
+        <h2><a href="https://finance.yahoo.com/markets/stocks/articles/amd-stock-intel-crushed-nvidia-223000800.html" target="_blank" rel="noopener"><span class="l-cs">AMD a Intel v první polovině roku porazily Nvidii, co bude dál?</span><span class="l-en">AMD and Intel stock beat Nvidia in the first half. Here&#x27;s my prediction for H2</span></a></h2>
+        <p><span class="l-cs">Akcie AMD a Intelu si v první polovině roku vedly lépe než Nvidia, přestože ta zůstává lídrem AI čipů. Autor odhaduje, jak se situace může vyvíjet ve druhém pololetí.</span><span class="l-en">AMD and Intel shares outperformed Nvidia in the first half of the year, even though Nvidia remains the AI-chip leader. The author offers a forecast for the second half.</span></p>
+        <footer><span class="zdroj">Yahoo Finance</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="akcie" style="--barva:#1d5c4d">
+        <h2><a href="https://www.theguardian.com/business/2026/jul/05/easyjet-agrees-to-5bn-takeover-by-us-investment-firm" target="_blank" rel="noopener"><span class="l-cs">EasyJet míří k převzetí americkou investiční firmou Castlelake za 5,5 miliardy liber</span><span class="l-en">EasyJet set for £5.5bn takeover by US investment firm Castlelake</span></a></h2>
+        <p><span class="l-cs">Britský nízkonákladový dopravce easyJet oznámil principiální souhlas s nabídkou od Castlelake, čímž by se firma stala soukromou. Dohoda přichází po několika předchozích odmítnutých nabídkách.</span><span class="l-en">British budget airline easyJet has agreed in principle to a takeover offer from US investment firm Castlelake, which would take the carrier private. The deal follows several previously rejected bids.</span></p>
+        <footer><span class="zdroj">The Guardian Business</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="akcie" style="--barva:#1d5c4d">
+        <h2><a href="https://www.marketwatch.com/story/u-s-stock-futures-rise-as-wall-street-looks-to-extend-its-rally-coming-off-the-holiday-weekend-5e5a9102?mod=mw_rss_topstories" target="_blank" rel="noopener"><span class="l-cs">Americké akciové futures rostou, Wall Street chce navázat na sváteční rally</span><span class="l-en">US stock futures rise as Wall Street looks to extend holiday rally</span></a></h2>
+        <p><span class="l-cs">Futures na hlavní americké indexy v neděli posilovaly a investoři očekávají pokračování minulotýdenních zisků. Trh tak zůstává v pozitivní náladě i po prodlouženém víkendu.</span><span class="l-en">Futures on major US indices gained on Sunday as investors expect last week&#x27;s rally to continue. Markets remain upbeat following the long holiday weekend.</span></p>
+        <footer><span class="zdroj">MarketWatch</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="akcie" style="--barva:#1d5c4d">
+        <h2><a href="https://www.marketwatch.com/story/why-the-stock-markets-red-hot-momentum-trade-might-be-headed-for-a-violent-unwind-this-month-78a45397?mod=mw_rss_topstories" target="_blank" rel="noopener"><span class="l-cs">Momentum obchody na akciích čelí riziku prudkého zvratu v červenci</span><span class="l-en">Stock market&#x27;s red-hot momentum trade may face a violent unwind this month</span></a></h2>
+        <p><span class="l-cs">Strategové upozorňují, že populární momentum strategie mají v červenci historicky slabší výsledky a letos by mohl být propad obzvlášť prudký. Na trhu se už objevují první signály obratu.</span><span class="l-en">Strategists warn that popular momentum trades historically struggle in July, and this year&#x27;s reversal could be especially sharp. Early signs of a shift are already appearing.</span></p>
+        <footer><span class="zdroj">MarketWatch</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="akcie" style="--barva:#1d5c4d">
+        <h2><a href="https://www.wsj.com/finance/investing/stocks-q2-2026-look-back-4b7f8c7d?mod=rss_markets_main" target="_blank" rel="noopener"><span class="l-cs">Akciové fondy za čtvrtletí vydělaly 17 procent v turbulentním období pro investory</span><span class="l-en">Stock funds rallied 17.1% in a quarter that made investors&#x27; heads spin</span></a></h2>
+        <p><span class="l-cs">Fondy zaměřené na akcie zaznamenaly za poslední kvartál růst o 17,1 procenta, poháněný IPO boomem, válečnou rally i novým vedením Fedu. Investoři museli zpracovat neobvykle mnoho protichůdných signálů.</span><span class="l-en">Equity funds gained 17.1% over the past quarter, driven by an IPO boom, a war rally and a new Fed leadership. Investors had an unusually turbulent set of signals to digest.</span></p>
+        <footer><span class="zdroj">WSJ Markets</span><span class="datum">2026-07-04</span></footer>
+      </article>
+    </div>
+  </section>
+  <section class="rubrika" data-tema="AI" style="--barva:#5d4870">
+    <h2 class="rubrika-titul"><span class="tecka"></span><span class="l-cs">AI</span><span class="l-en">AI</span><span class="rubrika-pocet">7</span></h2>
+    <div class="mrizka">
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="http://www.patria.cz/zpravodajstvi/7109496/vikendar-ai-ma-jiny-investicni-cyklus-nez-predchozi-technologie.html" target="_blank" rel="noopener"><span class="l-cs">Fed zkoumal dopady AI na trh práce: přesuny pozic, ne masové propouštění</span><span class="l-en">Fed study: AI has a different investment cycle than past technologies</span></a></h2>
+        <p><span class="l-cs">Rozsáhlý průzkum ekonomů americké centrální banky ukazuje, že umělá inteligence má odlišný investiční cyklus než předchozí technologie. Dopad na zaměstnanost by podle studie měl být hlavně v podobě realokace pracovních míst, nikoli jejich masového rušení.</span><span class="l-en">A comprehensive survey by Federal Reserve economists finds artificial intelligence follows a distinct investment cycle compared with earlier technologies. The employment impact is expected to be mainly job reallocation rather than mass layoffs.</span></p>
+        <footer><span class="zdroj">Patria</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="https://www.theguardian.com/technology/2026/jul/04/openai-apparent-failure-visit-key-site-questions-stargate-uk-project" target="_blank" rel="noopener"><span class="l-cs">OpenAI zřejmě nikdy nenavštívilo klíčové místo pro britský megaprojekt Stargate UK</span><span class="l-en">OpenAI&#x27;s apparent failure to visit key site raises questions over UK investment</span></a></h2>
+        <p><span class="l-cs">Britská vláda prezentovala investici OpenAI ve výši až 30 miliard liber, ale podle zjištění deníku Guardian zůstala velká část plánu jen hypotetická. Projekt datacentra Stargate UK byl v dubnu pozastaven.</span><span class="l-en">The UK government touted a potential £30bn OpenAI investment, but a Guardian investigation found much of the plan was purely hypothetical. The Stargate UK datacentre project was paused in April.</span></p>
+        <footer><span class="zdroj">The Guardian Business</span><span class="datum">2026-07-04</span></footer>
+      </article>
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="https://www.wsj.com/tech/spacexs-telecom-dreams-d461e568?mod=rss_Technology" target="_blank" rel="noopener"><span class="l-cs">SpaceX plánuje vstup do telekomunikací</span><span class="l-en">SpaceX&#x27;s telecom dreams</span></a></h2>
+        <p><span class="l-cs">Přehled ze světa technologií se věnuje telekomunikačním plánům SpaceX. Zmiňuje také konec zákazu aplikace Fable ze strany Anthropicu a zjištění, že spotřeba vody datacenter je vyšší, než se oficiálně uvádí.</span><span class="l-en">A tech roundup focuses on SpaceX&#x27;s telecom ambitions. It also covers Anthropic lifting its ban on the Fable app and new findings that datacenter water use is higher than officially reported.</span></p>
+        <footer><span class="zdroj">WSJ Tech</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="https://www.wsj.com/business/venture-capitalist-vinod-khosla-wsj-money-interview-5ca5a2a5?mod=rss_markets_main" target="_blank" rel="noopener"><span class="l-cs">Investor OpenAI Vinod Khosla: Chci platit vyšší daně, AI změní celou ekonomiku</span><span class="l-en">Early OpenAI investor Vinod Khosla explains why he wants to pay more taxes</span></a></h2>
+        <p><span class="l-cs">Technologický miliardář a raný investor do OpenAI Vinod Khosla vysvětluje, proč nesouhlasí s částí amerického daňového systému a proč se Silicon Valley přiklonilo k Trumpovi. Zamýšlí se i nad tím, jak umělá inteligence promění ekonomiku.</span><span class="l-en">Tech billionaire and early OpenAI investor Vinod Khosla discusses his issues with the US tax system and why Silicon Valley shifted toward Trump. He also shares his views on how AI will reshape the economy.</span></p>
+        <footer><span class="zdroj">WSJ Markets</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="https://techcrunch.com/2026/07/04/alibaba-reportedly-bans-employees-from-using-claude-code/" target="_blank" rel="noopener"><span class="l-cs">Alibaba prý zakázala zaměstnancům používat Anthropic Claude Code</span><span class="l-en">Alibaba reportedly bans employees from using Anthropic&#x27;s Claude Code</span></a></h2>
+        <p><span class="l-cs">Čínský technologický gigant Alibaba měl podle informací klasifikovat nástroj Claude Code od Anthropicu jako vysoce rizikový software. Zákaz zapadá do širšího trendu, kdy čínské firmy omezují používání zahraničních AI nástrojů.</span><span class="l-en">Chinese tech giant Alibaba has reportedly classified Anthropic&#x27;s Claude Code as high-risk software for employee use. The ban fits a broader trend of Chinese firms restricting foreign AI tools.</span></p>
+        <footer><span class="zdroj">TechCrunch AI</span><span class="datum">2026-07-04</span></footer>
+      </article>
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="https://www.e15.cz/byznys/reality-a-stavebnictvi/ai-a-hybridni-prace-meni-kancelare-firmy-zmensuji-prostory-a-sazeji-na-flexibilitu-1433711" target="_blank" rel="noopener"><span class="l-cs">AI a hybridní práce mění podobu kanceláří, firmy zmenšují prostory</span><span class="l-en">AI and hybrid work are reshaping offices as firms shrink their space</span></a></h2>
+        <p><span class="l-cs">Společnosti už při plánování kanceláří nepočítají s automatickým růstem počtu zaměstnanců. Umělá inteligence spolu s hybridní prací mění nejen způsob práce, ale i celý kancelářský trh.</span><span class="l-en">Companies no longer plan offices assuming automatic headcount growth. Artificial intelligence combined with hybrid work is transforming not just how people work, but the entire office property market.</span></p>
+        <footer><span class="zdroj">E15</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="AI" style="--barva:#5d4870">
+        <h2><a href="https://techcrunch.com/2026/07/04/what-is-mistral-ai-everything-to-know-about-the-openai-competitor/" target="_blank" rel="noopener"><span class="l-cs">Mistral AI: kdo je francouzský vyzyvatel OpenAI</span><span class="l-en">What is Mistral AI? Everything to know about the OpenAI competitor</span></a></h2>
+        <p><span class="l-cs">Mistral AI, nabízející open-source modely, od svého vzniku v roce 2023 získala výrazné finanční prostředky s ambicí zpřístupnit špičkovou AI komukoliv. Text shrnuje, čím se firma odlišuje od konkurence.</span><span class="l-en">Mistral AI, which offers open-source models, has raised significant funding since its 2023 founding with the ambition to put frontier AI in everyone&#x27;s hands. The piece explains what sets it apart from rivals.</span></p>
+        <footer><span class="zdroj">TechCrunch AI</span><span class="datum">2026-07-04</span></footer>
+      </article>
+    </div>
+  </section>
+  <section class="rubrika" data-tema="ekonomika" style="--barva:#2c4a6e">
+    <h2 class="rubrika-titul"><span class="tecka"></span><span class="l-cs">ekonomika</span><span class="l-en">Economy</span><span class="rubrika-pocet">5</span></h2>
+    <div class="mrizka">
+      <article class="karta" data-tema="ekonomika" style="--barva:#2c4a6e">
+        <h2><a href="https://www.marketwatch.com/story/opec-raises-output-levels-again-despite-tumbling-crude-prices-534791c8?mod=mw_rss_topstories" target="_blank" rel="noopener"><span class="l-cs">OPEC+ znovu zvyšuje těžbu ropy navzdory klesajícím cenám</span><span class="l-en">OPEC+ raises output levels again despite tumbling crude prices</span></a></h2>
+        <p><span class="l-cs">Velcí producenti ropy se v neděli dohodli na dalším mírném navýšení produkce, přestože ceny ropy klesají. Zvýšení je podle pozorovatelů zatím spíše symbolické, dokud se plně neobnoví plavba v Hormuzském průlivu po dohodě mezi USA a Íránem.</span><span class="l-en">Major oil producers agreed on Sunday to another modest output increase even as crude prices fall. Observers say the hike remains largely symbolic until a US-Iran peace deal firmly restores traffic through the Strait of Hormuz.</span></p>
+        <footer><span class="zdroj">MarketWatch</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="ekonomika" style="--barva:#2c4a6e">
+        <h2><a href="https://www.wsj.com/finance/commodities-futures/a-sudden-glut-of-oil-threatens-to-weaken-irans-hand-in-talks-adfcf7c0?mod=rss_markets_main" target="_blank" rel="noopener"><span class="l-cs">Nadbytek ropy na trhu oslabuje vyjednávací pozici Íránu</span><span class="l-en">A sudden oil glut threatens to weaken Iran&#x27;s negotiating hand</span></a></h2>
+        <p><span class="l-cs">Levnější a dostupnější ropa umožňuje zemím rychleji doplnit zásoby a snižuje schopnost Teheránu využívat Hormuzský průliv jako páku ve vyjednávání. Situace tak mění dynamiku napětí v regionu.</span><span class="l-en">Cheaper, more abundant crude lets countries refill stockpiles faster, undercutting Tehran&#x27;s ability to use the Strait of Hormuz as leverage. The shift is reshaping the dynamics of regional tensions.</span></p>
+        <footer><span class="zdroj">WSJ Markets</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="ekonomika" style="--barva:#2c4a6e">
+        <h2><a href="http://www.patria.cz/zpravodajstvi/7109507/investicni-vyhled-na-druhe-pololeti-volby-vrati-na-scenu-politicka-rizika.html" target="_blank" rel="noopener"><span class="l-cs">Investiční výhled na druhé pololetí: volby vrátí na scénu politická rizika</span><span class="l-en">H2 investment outlook: elections bring political risk back into focus</span></a></h2>
+        <p><span class="l-cs">Analytici Patria Finance ve svém výhledu mapují klíčové faktory pro trhy ve druhém pololetí, včetně dopadu blížících se voleb na akcie, dluhopisy i měny. Zvláštní pozornost věnují také technologickému sektoru.</span><span class="l-en">Patria Finance analysts map out the key factors set to drive global markets in the second half of the year, including how upcoming elections could affect stocks, bonds and currencies. The outlook also focuses closely on the tech sector.</span></p>
+        <footer><span class="zdroj">Patria</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="ekonomika" style="--barva:#2c4a6e">
+        <h2><a href="https://www.wsj.com/finance/investing/environmental-social-governance-investing-df325691?mod=rss_markets_main" target="_blank" rel="noopener"><span class="l-cs">ESG investování v krizi: odlivy miliard, zavírání fondů, tišší strategie</span><span class="l-en">The state of ESG investing: how dire is it?</span></a></h2>
+        <p><span class="l-cs">Investoři z ESG fondů stahují miliardy dolarů, řada fondů se zavírá a hlasování na valných hromadách podle ESG kritérií klesá. Zastánci strategie ale tvrdí, že zůstává životaschopná, jen se prosazuje méně nahlas.</span><span class="l-en">Investors have pulled billions from ESG funds, many funds have closed, and ESG-focused proxy voting has declined. Proponents argue the strategy remains viable, just pursued more quietly.</span></p>
+        <footer><span class="zdroj">WSJ Markets</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="ekonomika" style="--barva:#2c4a6e">
+        <h2><a href="https://www.wsj.com/world/nato-is-fixing-its-cash-flow-problem-now-it-needs-to-turn-money-into-munitions-1440bd35" target="_blank" rel="noopener"><span class="l-cs">NATO řeší cash flow, teď musí peníze proměnit ve zbraně</span><span class="l-en">NATO is fixing its cash flow problem, now needs to turn money into munitions</span></a></h2>
+        <p><span class="l-cs">Šéf aliance Mark Rutte uvedl, že zbrojní firmy se snaží stíhat rostoucí poptávku, jak členské státy navyšují výdaje na obranu. Problémem už není nedostatek financí, ale výrobní kapacita.</span><span class="l-en">Alliance chief Mark Rutte says defense contractors are struggling to keep pace with rising demand as member states raise military spending. The bottleneck has shifted from funding to production capacity.</span></p>
+        <footer><span class="zdroj">WSJ World</span><span class="datum">2026-07-05</span></footer>
+      </article>
+    </div>
+  </section>
+  <section class="rubrika" data-tema="česká ekonomika" style="--barva:#7d3c46">
+    <h2 class="rubrika-titul"><span class="tecka"></span><span class="l-cs">česká ekonomika</span><span class="l-en">Czech economy</span><span class="rubrika-pocet">7</span></h2>
+    <div class="mrizka">
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://csu.gov.cz/rychle-informace/deficit-a-dluh-vladnich-instituci-1-ctvrtleti-2026" target="_blank" rel="noopener"><span class="l-cs">Rozpočet vládních institucí skončil v prvním čtvrtletí v deficitu 3,5 procenta HDP</span><span class="l-en">Czech government deficit hit 3.5% of GDP in Q1</span></a></h2>
+        <p><span class="l-cs">Podle ČSÚ hospodařil sektor vládních institucí v prvním čtvrtletí letošního roku se schodkem 3,5 procenta HDP. Číslo naznačuje, s jakými fiskálními problémy se česká ekonomika potýká.</span><span class="l-en">The Czech Statistical Office reports that general government ran a deficit of 3.5% of GDP in the first quarter of this year. The figure highlights the fiscal challenges facing the Czech economy.</span></p>
+        <footer><span class="zdroj">ČSÚ rychlé informace</span><span class="datum"></span></footer>
+      </article>
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://csu.gov.cz/rychle-informace/indexy-spotrebitelskych-cen-inflace-kveten-2026" target="_blank" rel="noopener"><span class="l-cs">Inflace v Česku v květnu dál zpomalovala</span><span class="l-en">Czech inflation slowed further in May</span></a></h2>
+        <p><span class="l-cs">Meziroční růst spotřebitelských cen v květnu podle ČSÚ zpomalil, což je dobrá zpráva pro domácnosti i ČNB při rozhodování o sazbách. Trend potvrzuje postupné ochlazování cenového růstu v ekonomice.</span><span class="l-en">Year-on-year consumer price growth slowed in May, according to the Czech Statistical Office, good news for households and for the central bank&#x27;s rate decisions. The trend confirms a gradual cooling of price growth in the economy.</span></p>
+        <footer><span class="zdroj">ČSÚ rychlé informace</span><span class="datum"></span></footer>
+      </article>
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://www.ceskenoviny.cz/zpravy/mpsv-minimalni-mzda-by-mohla-od-ledna-dle-odhadu-vzrust-o-2500-kc-na-24900-kc/2847521?utm_source=rss&amp;utm_medium=feed" target="_blank" rel="noopener"><span class="l-cs">Minimální mzda by od ledna mohla vzrůst o 2500 korun na 24 900 Kč</span><span class="l-en">Czech minimum wage could rise by CZK 2,500 to CZK 24,900 in January</span></a></h2>
+        <p><span class="l-cs">Podle odhadů ministerstva práce a sociálních věcí by se minimální mzda mohla příští rok zvýšit na 24 900 korun a do roku 2028 dosáhnout 26 900 korun. Návrh je součástí připravovaného vládního nařízení.</span><span class="l-en">According to Labour Ministry estimates, the minimum wage could rise to CZK 24,900 next year and reach CZK 26,900 by 2028. The proposal is part of an upcoming government regulation.</span></p>
+        <footer><span class="zdroj">ČTK domácí</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://csu.gov.cz/rychle-informace/miry-zamestnanosti-nezamestnanosti-a-ekonomicke-aktivity-kveten-2026" target="_blank" rel="noopener"><span class="l-cs">Nezaměstnanost v Česku v květnu zůstala nízkých 3,2 procenta</span><span class="l-en">Czech unemployment held at a low 3.2% in May</span></a></h2>
+        <p><span class="l-cs">Míra nezaměstnanosti se podle ČSÚ v květnu držela na 3,2 procenta, což potvrzuje napjatý trh práce v Česku. Ekonomická aktivita obyvatel zůstává na stabilní úrovni.</span><span class="l-en">The unemployment rate stood at 3.2% in May, according to the Czech Statistical Office, confirming a tight domestic labour market. Economic activity levels remain stable.</span></p>
+        <footer><span class="zdroj">ČSÚ rychlé informace</span><span class="datum"></span></footer>
+      </article>
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://csu.gov.cz/rychle-informace/ctvrtletni-sektorove-ucty-1-ctvrtleti-2026" target="_blank" rel="noopener"><span class="l-cs">Příjmy českých domácností meziročně vzrostly o 3,2 procenta</span><span class="l-en">Czech household income rose 3.2% year on year</span></a></h2>
+        <p><span class="l-cs">Čtvrtletní sektorové účty ČSÚ ukazují, že příjmy domácností v prvním čtvrtletí stouply o 3,2 procenta meziročně. Data naznačují mírné posílení kupní síly Čechů.</span><span class="l-en">Quarterly sector accounts from the Czech Statistical Office show household incomes rose 3.2% year-on-year in Q1. The data point to a modest improvement in Czechs&#x27; purchasing power.</span></p>
+        <footer><span class="zdroj">ČSÚ rychlé informace</span><span class="datum"></span></footer>
+      </article>
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://byznys.hn.cz/c1-67900940-vlastni-expanze-uberu-do-ceska-se-nekona-firma-podle-ft-nevzdava-prevzeti-velkeho-konkurenta" target="_blank" rel="noopener"><span class="l-cs">Uber odkládá vlastní expanzi do Česka, soustředí se na převzetí Delivery Hero</span><span class="l-en">Uber shelves its own Czech expansion, focuses on Delivery Hero takeover bid</span></a></h2>
+        <p><span class="l-cs">Americká firma Uber pozastavila plánované rozšíření služby Uber Eats do Česka a dalších evropských zemí. Podle Financial Times se místo toho soustředí na snahu převzít konkurenční Delivery Hero.</span><span class="l-en">US company Uber has paused planned expansion of Uber Eats into the Czech Republic and other European markets. According to the Financial Times, it is instead concentrating on trying to acquire rival Delivery Hero.</span></p>
+        <footer><span class="zdroj">HN Byznys</span><span class="datum">2026-07-05</span></footer>
+      </article>
+      <article class="karta" data-tema="česká ekonomika" style="--barva:#7d3c46">
+        <h2><a href="https://www.e15.cz/byznys/prumysl-a-energetika/cesko-totalne-pohorelo-v-zebricku-zelene-energie-hure-je-na-tom-uz-jen-jeden-maly-stat-1434007" target="_blank" rel="noopener"><span class="l-cs">Česko propadlo v žebříčku zelené energie mezi zeměmi EU</span><span class="l-en">Czech Republic ranks near the bottom of the EU for green energy</span></a></h2>
+        <p><span class="l-cs">V podílu obnovitelných zdrojů na výrobě elektřiny patří Česko mezi nejhorší státy Evropské unie, hůře je na tom už jen jedna malá země. Žebříček ukazuje propastné rozdíly mezi členskými státy v zelené transformaci.</span><span class="l-en">The Czech Republic has one of the lowest shares of renewables in electricity production among EU countries, trailing all but one small member state. The ranking highlights stark gaps in the bloc&#x27;s green transition.</span></p>
+        <footer><span class="zdroj">E15</span><span class="datum">2026-07-05</span></footer>
+      </article>
+    </div>
+  </section>
+</div>
+<script>
+  // ---- Filtrování rubrik podle tématu (jen stránka Zprávy) ----
+  document.querySelectorAll(".filtr").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".filtr").forEach(b => b.classList.remove("aktivni"));
+      btn.classList.add("aktivni");
+      var tema = btn.dataset.tema;
+      document.querySelectorAll(".rubrika").forEach(function (r) {
+        r.classList.toggle("skryta", tema !== "vse" && r.dataset.tema !== tema);
+      });
+    });
+  });
+
+  // ---- Aktuality: záložky Svět/Česko + stránkování po 4 ----
+  (function () {
+    var NA_STRANKU = 4;
+    var aktivniTab = document.querySelector(".akt-tab.aktivni");
+    if (!aktivniTab) return;
+    var stav = { oblast: aktivniTab.dataset.oblast, strana: 0 };
+    var pager = document.getElementById("akt-pager");
+    var popisek = document.getElementById("akt-stranka");
+    var zpet = document.getElementById("akt-zpet");
+    var dal = document.getElementById("akt-dal");
+
+    function prekresli() {
+      var vTabu = Array.from(document.querySelectorAll(".akt"))
+        .filter(a => a.dataset.oblast === stav.oblast);
+      var stran = Math.max(1, Math.ceil(vTabu.length / NA_STRANKU));
+      if (stav.strana >= stran) stav.strana = stran - 1;
+      document.querySelectorAll(".akt").forEach(a => a.classList.add("skryta"));
+      vTabu.slice(stav.strana * NA_STRANKU, (stav.strana + 1) * NA_STRANKU)
+        .forEach(a => a.classList.remove("skryta"));
+      popisek.textContent = (stav.strana + 1) + " / " + stran;
+      zpet.disabled = stav.strana === 0;
+      dal.disabled = stav.strana >= stran - 1;
+      pager.style.display = stran > 1 ? "flex" : "none";
+    }
+    document.querySelectorAll(".akt-tab").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.querySelectorAll(".akt-tab").forEach(b => b.classList.remove("aktivni"));
+        btn.classList.add("aktivni");
+        stav.oblast = btn.dataset.oblast;
+        stav.strana = 0;
+        prekresli();
+      });
+    });
+    zpet.addEventListener("click", function () { stav.strana--; prekresli(); });
+    dal.addEventListener("click", function () { stav.strana++; prekresli(); });
+    prekresli();
+  })();
+
+  // ---- Grafy ukazatelů (jen stránka Data) ----
+  (function () {
+    var zdrojDat = document.getElementById("trhy-data");
+    if (!zdrojDat) return;
+    var TRHY = JSON.parse(zdrojDat.textContent);
+    var SIRKA = 320, VYSKA = 90, OKRAJ = 6;
+
+    function hezkeDatum(iso) {
+      var c = iso.split("-");
+      return c[2].replace(/^0/, "") + ". " + c[1].replace(/^0/, "") + ". " + c[0];
+    }
+
+    function vykresli(karta) {
+      var i = +karta.dataset.i;
+      var aktivni = karta.querySelector(".rozsah.aktivni");
+      var dny = aktivni ? +aktivni.dataset.dny : 66;
+      var body = (TRHY[i].historie || []);
+      if (dny > 0) body = body.slice(-dny);
+      var svg = karta.querySelector(".graf");
+      if (!svg || body.length < 2) return;
+
+      var hodnoty = body.map(b => b[1]);
+      var min = Math.min.apply(null, hodnoty), max = Math.max.apply(null, hodnoty);
+      if (max === min) { max += 1; min -= 1; }
+      var body_svg = body.map(function (b, j) {
+        var x = OKRAJ + (j / (body.length - 1)) * (SIRKA - 2 * OKRAJ);
+        var y = VYSKA - OKRAJ - ((b[1] - min) / (max - min)) * (VYSKA - 2 * OKRAJ);
+        return x.toFixed(1) + "," + y.toFixed(1);
+      });
+      var cara = "M" + body_svg.join(" L");
+      var plocha = cara + " L" + (SIRKA - OKRAJ) + "," + (VYSKA - OKRAJ)
+                 + " L" + OKRAJ + "," + (VYSKA - OKRAJ) + " Z";
+      svg.innerHTML = '<path class="graf-plocha" d="' + plocha + '"/>'
+                    + '<path class="graf-cara" d="' + cara + '"/>';
+      var od = karta.querySelector(".g-od"), doo = karta.querySelector(".g-do");
+      if (od) od.textContent = hezkeDatum(body[0][0]);
+      if (doo) doo.textContent = hezkeDatum(body[body.length - 1][0]);
+      // Uložíme si data pro čtení hodnot myší
+      karta._graf = { body: body, min: min, max: max };
+    }
+
+    function formatCena(v) {
+      if (Math.abs(v) >= 1000)
+        return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+      return v.toFixed(2).replace(".", ",");
+    }
+
+    function zapniCteniMysi(karta) {
+      var obal = karta.querySelector(".graf-obal");
+      if (!obal) return;
+      var svg = obal.querySelector(".graf");
+      var tip = obal.querySelector(".graf-tip");
+      var svisla = obal.querySelector(".graf-svisla");
+      var tecka = obal.querySelector(".graf-tecka");
+
+      obal.addEventListener("mousemove", function (e) {
+        var g = karta._graf;
+        if (!g || g.body.length < 2) return;
+        var rect = svg.getBoundingClientRect();
+        var fx = (e.clientX - rect.left) / rect.width * SIRKA;
+        var n = g.body.length;
+        var idx = Math.round((fx - OKRAJ) / (SIRKA - 2 * OKRAJ) * (n - 1));
+        idx = Math.max(0, Math.min(n - 1, idx));
+        var bod = g.body[idx];
+        var xSvg = OKRAJ + (idx / (n - 1)) * (SIRKA - 2 * OKRAJ);
+        var ySvg = VYSKA - OKRAJ - ((bod[1] - g.min) / (g.max - g.min)) * (VYSKA - 2 * OKRAJ);
+        var xPx = xSvg / SIRKA * rect.width;
+        var yPx = ySvg / VYSKA * rect.height;
+
+        svisla.style.left = xPx + "px";
+        tecka.style.left = xPx + "px";
+        tecka.style.top = yPx + "px";
+        tip.style.left = Math.max(38, Math.min(rect.width - 38, xPx)) + "px";
+        tip.style.top = yPx + "px";
+        tip.textContent = formatCena(bod[1]) + " \u00b7 " + hezkeDatum(bod[0]);
+        svisla.style.display = tecka.style.display = tip.style.display = "block";
+      });
+      obal.addEventListener("mouseleave", function () {
+        svisla.style.display = tecka.style.display = tip.style.display = "none";
+      });
+    }
+
+    document.querySelectorAll(".ukazatel").forEach(function (karta) {
+      karta.querySelectorAll(".rozsah").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          karta.querySelectorAll(".rozsah").forEach(b => b.classList.remove("aktivni"));
+          btn.classList.add("aktivni");
+          vykresli(karta);
+        });
+      });
+      vykresli(karta);
+      zapniCteniMysi(karta);
+    });
+  })();
+
+  // ---- Skrývání ukazatelů (pamatuje se v prohlížeči) ----
+  (function () {
+    var karty = document.querySelectorAll(".ukazatel");
+    if (!karty.length) return;
+    var obal = document.getElementById("skryte-obal");
+    var radek = document.getElementById("skryte-radek");
+
+    function nactiSkryte() {
+      try { return JSON.parse(localStorage.getItem("skryteUkazatele") || "[]"); }
+      catch (e) { return []; }
+    }
+    function ulozSkryte(s) { localStorage.setItem("skryteUkazatele", JSON.stringify(s)); }
+
+    function prekresliSkryte() {
+      var skryte = nactiSkryte();
+      karty.forEach(function (k) {
+        k.classList.toggle("skryta", skryte.indexOf(k.dataset.nazev) !== -1);
+      });
+      radek.innerHTML = "";
+      skryte.forEach(function (nazev) {
+        var chip = document.createElement("button");
+        chip.className = "skryty-chip";
+        chip.textContent = "+ " + nazev;
+        chip.addEventListener("click", function () {
+          ulozSkryte(nactiSkryte().filter(n => n !== nazev));
+          prekresliSkryte();
+        });
+        radek.appendChild(chip);
+      });
+      obal.style.display = skryte.length ? "flex" : "none";
+    }
+
+    karty.forEach(function (k) {
+      var btn = k.querySelector(".skryj");
+      if (btn) btn.addEventListener("click", function () {
+        var s = nactiSkryte();
+        if (s.indexOf(k.dataset.nazev) === -1) s.push(k.dataset.nazev);
+        ulozSkryte(s);
+        prekresliSkryte();
+      });
+    });
+    prekresliSkryte();
+  })();
+
+  // ---- Tmavý režim a jazyk (pamatují se, platí pro obě stránky) ----
+  var telo = document.body;
+  var obal = document.getElementById("obal");
+  var btnRezim = document.getElementById("rezim");
+  var btnJazyk = document.getElementById("jazyk");
+
+  function nastavRezim(tmavy) {
+    telo.classList.toggle("tmavy", tmavy);
+    btnRezim.textContent = tmavy ? "\u2600\uFE0F" : "\uD83C\uDF19";
+    localStorage.setItem("rezim", tmavy ? "tmavy" : "svetly");
+  }
+  function nastavJazyk(en) {
+    telo.classList.toggle("anglicky", en);
+    btnJazyk.textContent = en ? "CZ" : "EN";
+    document.documentElement.lang = en ? "en" : "cs";
+    localStorage.setItem("jazyk", en ? "en" : "cs");
+  }
+  btnRezim.addEventListener("click", function () {
+    nastavRezim(!telo.classList.contains("tmavy"));
+  });
+  btnJazyk.addEventListener("click", function () {
+    obal.classList.add("prolinani");
+    setTimeout(function () {
+      nastavJazyk(!telo.classList.contains("anglicky"));
+      obal.classList.remove("prolinani");
+    }, 220);
+  });
+  var ulozenyRezim = localStorage.getItem("rezim");
+  nastavRezim(ulozenyRezim ? ulozenyRezim === "tmavy"
+    : window.matchMedia("(prefers-color-scheme: dark)").matches);
+  nastavJazyk(localStorage.getItem("jazyk") === "en");
+</script>
+</body>
+</html>
