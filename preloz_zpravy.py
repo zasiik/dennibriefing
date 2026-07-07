@@ -9,8 +9,10 @@
 # API klíč se čte z proměnné prostředí ANTHROPIC_API_KEY.
 # ============================================================
 
+import glob
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 
@@ -41,6 +43,24 @@ def _nacti_cache():
 def _uloz_cache(cache):
     with open(CACHE_SOUBOR, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False)
+
+
+def _nacti_videna_temata(max_vydani=3, max_radku=70):
+    """Titulky z posledních vydání (složka archiv/) — proti opakování."""
+    soubory = sorted(glob.glob(os.path.join("archiv", "*.json")))[-max_vydani:]
+    titulky, videne = [], set()
+    for soubor in soubory:
+        try:
+            with open(soubor, encoding="utf-8") as f:
+                d = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        for polozka in d.get("aktuality", []) + d.get("zpravy", []):
+            t = polozka.get("titulek", "")
+            if t and t not in videne:
+                videne.add(t)
+                titulky.append(t)
+    return titulky[-max_radku:]
 
 ZASADY_JAZYKA = """DŮLEŽITÉ ZÁSADY:
 - Kvalita jazyka je priorita číslo 1. Piš jako novinář — česky bez anglicismů
@@ -133,6 +153,17 @@ def vyber_a_preloz(zpravy):
         f"Níže je seznam zpráv z různých zdrojů."
     )
 
+    # Co už čtenář viděl v minulých vydáních (proti opakování témat)
+    videne = _nacti_videna_temata()
+    blok_videne = ""
+    if videne:
+        blok_videne = (
+            "\n\nJIŽ OTIŠTĚNO V MINULÝCH VYDÁNÍCH — tyto události čtenář zná."
+            " Nezařazuj je znovu, POKUD není podstatný nový vývoj; když je,"
+            " věnuj shrnutí právě tomu novému:\n"
+            + "\n".join("- " + t for t in videne)
+        )
+
     # ---------- Volání 1: karty podle témat (jen nepřeložené zprávy) ----------
     cache = _nacti_cache()
     nove = [z for z in zpravy if z["odkaz"] not in cache]
@@ -173,6 +204,10 @@ Pro každou vybranou zprávu vytvoř objekt:
 - Pokud dvě či více zpráv popisují tutéž událost, nejlepší z nich dej
   normální důležitost a ostatním důležitost 1, ať se přehled neopakuje.
 - Sportu, celebritám a bulváru dávej důležitost 1, pokud vůbec vybereš.
+- RUBRIKA AI: čtenáře zajímají hlavně novinky a TRENDY — nové modely
+  a jejich schopnosti, nové produkty, průlomový výzkum, velké investice
+  a kontrakty, regulace. Obor se vyvíjí rychle; vybírej to, co ukazuje,
+  KAM AI směřuje, ne recyklované obecné úvahy.{blok_videne}
 
 Odpověz POUZE platným JSON polem objektů, bez jakéhokoli dalšího textu.
 Pozor na validitu JSON: uvozovky uvnitř textů escapuj jako \\" a nepoužívej
@@ -277,7 +312,7 @@ Pro každou událost objekt:
    - "zdroje": pole čísel [id, id, ...] všech zpráv ze seznamu, které
      o události informují (ideálně 2+ různé redakce, minimálně 1)
 
-{ZASADY_JAZYKA}
+{ZASADY_JAZYKA}{blok_videne}
 
 Odpověz POUZE platným JSON polem objektů, bez jakéhokoli dalšího textu.
 Pozor na validitu JSON: uvozovky uvnitř textů escapuj jako \\" a nepoužívej
@@ -315,10 +350,13 @@ SEZNAM ZPRÁV:
     prompt_sledovat = f"""{hlavicka}
 
 Vytvoř krátký kalendář "Co sledovat" pro manažera: 5–8 NADCHÁZEJÍCÍCH
-událostí (ode dneška zhruba na týden dopředu), které mohou hýbat trhy,
-ekonomikou nebo českým děním — zasedání centrálních bank (Fed, ECB, ČNB),
-zveřejnění makrodat (inflace, HDP, trh práce od ČSÚ/Eurostatu), výsledky
-velkých firem, důležitá politická jednání a summity.
+událostí (ode dneška zhruba na týden dopředu). VÝHRADNĚ ekonomické
+a tržní události: zasedání centrálních bank (Fed, ECB, ČNB) a rozhodnutí
+o sazbách · zveřejnění makrodat (inflace, HDP, trh práce, PMI — ČSÚ,
+Eurostat, US data) · výsledková sezóna a výsledky velkých firem · aukce
+dluhopisů · summity s přímým ekonomickým dopadem (obchodní dohody).
+NEZAŘAZUJ diplomatické cesty, politické návštěvy ani společenské akce
+bez přímého dopadu na trhy.
 
 Pro každou událost objekt:
    - "datum": konkrétní datum "YYYY-MM-DD", nebo orientační text
@@ -452,8 +490,31 @@ def uloz_data(vysledek, soubor="data.json"):
         from stahni_trhy import stahni_klicova_cisla
         trhy = stahni_klicova_cisla()
     except Exception as chyba:
-        print(f"  Klíčová čísla nedostupná ({chyba}) — stránka bude bez pruhu.")
+        print(f"  Klíčová čísla nedostupná ({chyba}) — stránka bude bez nich.")
         trhy = []
+    try:
+        from stahni_makro import stahni_makro_cisla
+        trhy.extend(stahni_makro_cisla())
+    except Exception as chyba:
+        print(f"  Makrodata ČSÚ nedostupná ({chyba}).")
+
+    # Historie titulů "na přání" do samostatných souborů (lehčí stránka;
+    # prohlížeč si je stáhne, až si je návštěvník přidá)
+    os.makedirs("trhy_data", exist_ok=True)
+    for t in trhy:
+        if not t.get("vychozi", True) and t.get("historie"):
+            slug = re.sub(r"[^a-z0-9]+", "-",
+                          t["nazev"].lower().replace("č", "c").replace("ě", "e")
+                          .replace("š", "s").replace("ř", "r").replace("ž", "z")
+                          .replace("ý", "y").replace("á", "a").replace("í", "i")
+                          .replace("é", "e").replace("ú", "u").replace("ů", "u")
+                          .replace("ó", "o").replace("ť", "t").replace("ď", "d")
+                          .replace("ň", "n")).strip("-")
+            cesta = f"trhy_data/{slug}.json"
+            with open(cesta, "w", encoding="utf-8") as f:
+                json.dump(t["historie"], f, separators=(",", ":"))
+            t["soubor"] = cesta
+            t["historie"] = []
 
     data = {
         "vygenerovano": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -467,6 +528,19 @@ def uloz_data(vysledek, soubor="data.json"):
     print(f"Uloženo do {soubor} ({len(data['zpravy'])} zpráv, "
           f"{len(data['aktuality'])} aktualit, {len(data['sledovat'])} událostí, "
           f"{len(data['trhy'])} ukazatelů).")
+
+    # Kopie do archivu (kvůli neopakování témat v dalších vydáních)
+    os.makedirs("archiv", exist_ok=True)
+    archivni = datetime.now().strftime("archiv/%Y-%m-%d_%H%M.json")
+    with open(archivni, "w", encoding="utf-8") as f:
+        json.dump({"vygenerovano": data["vygenerovano"],
+                   "zpravy": data["zpravy"],
+                   "aktuality": data["aktuality"]},
+                  f, ensure_ascii=False)
+    # Úklid: nechat jen posledních 14 vydání
+    for stare in sorted(glob.glob("archiv/*.json"))[:-14]:
+        os.remove(stare)
+    print(f"Archivováno: {archivni}")
 
 
 # Spuštění napřímo: stáhne zprávy, přeloží a uloží data.json
