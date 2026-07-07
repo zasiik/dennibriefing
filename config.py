@@ -30,8 +30,16 @@ ZDROJE = {
     # "Politico Europe": "https://www.politico.eu/feed/",
     # "DW English": "https://rss.dw.com/rdf/rss-en-world",
 
+    # ---- Světové: agentury přes Google News (Reuters/Bloomberg nemají
+    #      veřejné RSS; tohle je oficiální cesta, jak jejich titulky odebírat) ----
+    "Reuters": "https://news.google.com/rss/search?q=site:reuters.com%20when:1d&hl=en-US&gl=US&ceid=US:en",
+    "Bloomberg": "https://news.google.com/rss/search?q=site:bloomberg.com%20when:1d&hl=en-US&gl=US&ceid=US:en",
+    "Financial Times": "https://news.google.com/rss/search?q=site:ft.com%20when:1d&hl=en-US&gl=US&ceid=US:en",
+
     # ---- Světové: byznys a ekonomika ----
     "BBC Business": "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "WSJ Business": "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness",
+    "ECB": "https://www.ecb.europa.eu/rss/press.html",
     "The Guardian Business": "https://www.theguardian.com/uk/business/rss",
     "WSJ Markets": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain",
     "MarketWatch": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
@@ -47,6 +55,7 @@ ZDROJE = {
 
     # ---- České: finance a ekonomika ----
     "Patria": "https://www.patria.cz/rss.html",
+    "Kurzy.cz": "https://rss.kurzy.cz/kurzy_zpravy.xml",
     "HN Byznys": "https://byznys.hn.cz/?m=rss",
     "E15": "https://www.e15.cz/rss",
 
@@ -112,13 +121,14 @@ def _nacti_tickery():
                     continue
                 casti = [c.strip() for c in radek.split("|")]
                 if len(casti) >= 2 and casti[0]:
+                    vychozi = (casti[3].lower() != "ne") if len(casti) > 3 else True
                     ukazatele.append(
                         (casti[0], casti[1],
-                         casti[2] if len(casti) > 2 else ""))
+                         casti[2] if len(casti) > 2 else "", vychozi))
     except FileNotFoundError:
         pass
     return ukazatele
 
 TRZNI_UKAZATELE = _nacti_tickery() or [
-    ("S&P 500", "^GSPC", "^spx"),   # záloha, kdyby tickery.txt chyběl
+    ("S&P 500", "^GSPC", "^spx", True),   # záloha, kdyby tickery.txt chyběl
 ]
