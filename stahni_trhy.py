@@ -13,6 +13,7 @@ import io
 import json
 import re
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 
 from config import TRZNI_UKAZATELE
@@ -39,42 +40,41 @@ _PRAZSKE_AKCIE = ["CEZ.PR", "KOMB.PR", "MONET.PR", "ERBAG.PR", "VIG.PR"]
 _KRYPTO = ["ETH-USD", "SOL-USD", "XRP-USD", "BNB-USD", "ADA-USD",
            "DOGE-USD", "DOT-USD", "LINK-USD", "AVAX-USD", "LTC-USD"]
 
-_KURZY = ["EURUSD=X", "GBPUSD=X", "JPY=X", "GBPCZK=X", "CHFCZK=X", "PLNCZK=X"]
+# (název, symbol Yahoo, záložní symbol stooq)
+_KURZY = [("EUR/USD", "EURUSD=X", "eurusd"), ("GBP/USD", "GBPUSD=X", "gbpusd"),
+          ("USD/JPY", "JPY=X", "usdjpy"), ("GBP/CZK", "GBPCZK=X", "gbpczk"),
+          ("CHF/CZK", "CHFCZK=X", "chfczk"), ("PLN/CZK", "PLNCZK=X", "plnczk")]
 
-_KOMODITY = [("Stříbro", "SI=F"), ("Měď", "HG=F"), ("Zemní plyn", "NG=F"),
-             ("Ropa WTI", "CL=F"), ("Platina", "PL=F")]
+_KOMODITY = [("Stříbro", "SI=F", "xagusd"), ("Měď", "HG=F", "hg.f"),
+             ("Zemní plyn", "NG=F", "ng.f"), ("Ropa WTI", "CL=F", "cl.f"),
+             ("Platina", "PL=F", "xptusd")]
 
-_INDEXY = [("Dow Jones", "^DJI"), ("DAX", "^GDAXI"), ("FTSE 100", "^FTSE"),
-           ("CAC 40", "^FCHI"), ("Euro Stoxx 50", "^STOXX50E"),
-           ("Nikkei 225", "^N225"), ("Hang Seng", "^HSI"),
-           ("VIX", "^VIX"), ("US 10Y výnos", "^TNX")]
+_INDEXY = [("Dow Jones", "^DJI", "^dji"), ("DAX", "^GDAXI", "^dax"),
+           ("FTSE 100", "^FTSE", ""), ("CAC 40", "^FCHI", "^cac"),
+           ("Euro Stoxx 50", "^STOXX50E", ""), ("Nikkei 225", "^N225", "^nkx"),
+           ("Hang Seng", "^HSI", ""), ("VIX", "^VIX", ""),
+           ("US 10Y výnos", "^TNX", "")]
 
 
 def _katalog():
     """Vrátí katalogové tituly jako (nazev, yahoo, stooq, vychozi=False)."""
     polozky = []
-    for symbol in _US_AKCIE + _SVETOVE_AKCIE + _PRAZSKE_AKCIE:
-        nazev = symbol.replace("-USD", "").split(".")[0].replace("=X", "")
+    for symbol in _US_AKCIE:
+        # americké akcie mají na stooq tvar "aapl.us" — automatická záloha
+        polozky.append((symbol, symbol, symbol.lower() + ".us", False))
+    for symbol in _SVETOVE_AKCIE + _PRAZSKE_AKCIE:
+        nazev = symbol.split(".")[0]
         polozky.append((nazev, symbol, "", False))
     for symbol in _KRYPTO:
         polozky.append((symbol.replace("-USD", "") + " (krypto)", symbol, "", False))
-    for symbol in _KURZY:
-        nazev = symbol.replace("=X", "")
-        if symbol == "JPY=X":
-            nazev = "USD/JPY"
-        elif "CZK" in nazev:
-            nazev = nazev[:3] + "/CZK"
-        else:
-            nazev = nazev[:3] + "/" + nazev[3:]
-        polozky.append((nazev, symbol, "", False))
-    for nazev, symbol in _KOMODITY + _INDEXY:
-        polozky.append((nazev, symbol, "", False))
+    for nazev, symbol, stooq in _KURZY + _KOMODITY + _INDEXY:
+        polozky.append((nazev, symbol, stooq, False))
     return polozky
 
 
 def _stahni(url):
     pozadavek = urllib.request.Request(url, headers=_HLAVICKY)
-    with urllib.request.urlopen(pozadavek, timeout=20) as odpoved:
+    with urllib.request.urlopen(pozadavek, timeout=12) as odpoved:
         return odpoved.read().decode("utf-8", errors="replace")
 
 
@@ -148,7 +148,6 @@ def _repo_sazba_cnb():
 
 def stahni_klicova_cisla():
     """Vrátí seznam ukazatelů s historií. Chyby jen vypíše a jede dál."""
-    cisla = []
     # tickery.txt (tvoje sada) + katalog pro návštěvníky, bez duplicit
     vsechny = list(TRZNI_UKAZATELE)
     uz_mame = {u[1] for u in vsechny} | {u[0] for u in vsechny}
@@ -156,8 +155,10 @@ def stahni_klicova_cisla():
         if polozka[0] not in uz_mame and polozka[1] not in uz_mame:
             vsechny.append(polozka)
             uz_mame.add(polozka[0]); uz_mame.add(polozka[1])
-    print(f"  Stahuji {len(vsechny)} titulů (může to pár minut trvat)...")
-    for nazev, yahoo_symbol, stooq_symbol, vychozi in vsechny:
+    print(f"  Stahuji {len(vsechny)} titulů paralelně...")
+
+    def _jeden(polozka):
+        nazev, yahoo_symbol, stooq_symbol, vychozi = polozka
         zaznam, chyby = None, []
         if yahoo_symbol:
             try:
@@ -171,9 +172,19 @@ def stahni_klicova_cisla():
                 chyby.append(f"stooq: {chyba}")
         if zaznam:
             zaznam["vychozi"] = vychozi
-            cisla.append(zaznam)
-        else:
-            print(f"  Ukazatel {nazev}: nedostupný ({'; '.join(chyby) or 'bez zdroje'})")
+        return nazev, zaznam, chyby
+
+    cisla, selhani = [], []
+    with ThreadPoolExecutor(max_workers=8) as bazen:
+        for nazev, zaznam, chyby in bazen.map(_jeden, vsechny):
+            if zaznam:
+                cisla.append(zaznam)
+            else:
+                selhani.append(f"{nazev} ({'; '.join(chyby) or 'bez dat'})")
+    for radek in selhani[:8]:
+        print(f"  Ukazatel nedostupný: {radek}")
+    if len(selhani) > 8:
+        print(f"  ...a dalších {len(selhani) - 8} titulů nedostupných.")
     try:
         repo = _repo_sazba_cnb()
         if repo:

@@ -32,10 +32,11 @@ MAKRO_RADY = [
         "jednotka": "",
     },
     {
+        # Pozn.: tahle sada nemá dimenzi TYPUDAJESP (na rozdíl od zahájených)
         "nazev": "Dokončené byty ČR / měsíc",
         "sada": "STA09B1", "verze": 1,
         "ukazatel": "3103",
-        "dimenze": {"CasM": [], "Uz0A": [], "TYPUDAJESP": ["0"]},
+        "dimenze": {"CasM": [], "Uz0A": []},
         "jednotka": "",
     },
 ]

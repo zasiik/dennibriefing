@@ -217,7 +217,7 @@ SEZNAM ZPRÁV:
 {seznam_novych}"""
 
     if nove:
-        print(f"Volání 1/4: výběr a překlad {len(nove)} nových zpráv ({MODEL})...")
+        print(f"Volání 1/3: výběr a překlad {len(nove)} nových zpráv ({MODEL})...")
         surove_karty = _zavolej_clauda(client, prompt_karty)
         dnes = datetime.now().strftime("%Y-%m-%d")
         for v in surove_karty:
@@ -236,7 +236,7 @@ SEZNAM ZPRÁV:
             }
         _uloz_cache(cache)
     else:
-        print("Volání 1/4: přeskočeno — všechny zprávy už jsou přeložené v cache.")
+        print("Volání 1/3: přeskočeno — všechny zprávy už jsou přeložené v cache.")
 
     # Karty = přeložené verze aktuálně stažených zpráv,
     # seskupené do rubrik podle TEMATA, max MAX_NA_TEMA na rubriku
@@ -312,17 +312,37 @@ Pro každou událost objekt:
    - "zdroje": pole čísel [id, id, ...] všech zpráv ze seznamu, které
      o události informují (ideálně 2+ různé redakce, minimálně 1)
 
+DRUHÝ ÚKOL — "sledovat": krátký kalendář Co sledovat: 5–8 NADCHÁZEJÍCÍCH
+událostí (ode dneška zhruba na týden dopředu). VÝHRADNĚ ekonomické a tržní:
+zasedání centrálních bank a rozhodnutí o sazbách · makrodata (inflace, HDP,
+trh práce, PMI) · výsledková sezóna velkých firem · aukce dluhopisů ·
+summity s přímým ekonomickým dopadem. ŽÁDNÉ diplomatické cesty a politické
+návštěvy bez tržního dopadu. Uváděj jen události vyplývající ze zpráv
+v seznamu, nebo pravidelné termíny, kterými si jsi opravdu jistý; u nejistého
+data napiš orientačně ("tento týden", "příští týden"). Seřaď od nejbližší.
+Každá událost: {{"datum": "YYYY-MM-DD" nebo text, "nazev": česky (max 10
+slov), "nazev_en": anglicky}}
+
 {ZASADY_JAZYKA}{blok_videne}
 
-Odpověz POUZE platným JSON polem objektů, bez jakéhokoli dalšího textu.
+Odpověz POUZE platným JSON objektem
+{{"aktuality": [...], "sledovat": [...]}}, bez jakéhokoli dalšího textu.
 Pozor na validitu JSON: uvozovky uvnitř textů escapuj jako \\" a nepoužívej
 nezakončené řetězce.
 
 SEZNAM ZPRÁV:
 {seznam}"""
 
-    print(f"Volání 2/4: aktuality za 24 hodin ({MODEL})...")
-    surove_aktuality = _zavolej_clauda(client, prompt_aktuality)
+    print(f"Volání 2/3: aktuality za 24 hodin + kalendář ({MODEL})...")
+    surova_odpoved = _zavolej_clauda(client, prompt_aktuality)
+    if isinstance(surova_odpoved, list):   # pojistka, kdyby vrátil jen pole
+        surova_odpoved = {"aktuality": surova_odpoved, "sledovat": []}
+    surove_aktuality = surova_odpoved.get("aktuality", [])
+    sledovat = [
+        {"datum": s.get("datum", ""), "nazev": s.get("nazev", ""),
+         "nazev_en": s.get("nazev_en", s.get("nazev", ""))}
+        for s in surova_odpoved.get("sledovat", []) if s.get("nazev")
+    ][:8]
 
     aktuality = []
     for a in surove_aktuality:
@@ -346,42 +366,7 @@ SEZNAM ZPRÁV:
         })
     aktuality.sort(key=lambda a: a["dulezitost"], reverse=True)
 
-    # ---------- Volání 3: co sledovat dnes / tento týden ----------
-    prompt_sledovat = f"""{hlavicka}
-
-Vytvoř krátký kalendář "Co sledovat" pro manažera: 5–8 NADCHÁZEJÍCÍCH
-událostí (ode dneška zhruba na týden dopředu). VÝHRADNĚ ekonomické
-a tržní události: zasedání centrálních bank (Fed, ECB, ČNB) a rozhodnutí
-o sazbách · zveřejnění makrodat (inflace, HDP, trh práce, PMI — ČSÚ,
-Eurostat, US data) · výsledková sezóna a výsledky velkých firem · aukce
-dluhopisů · summity s přímým ekonomickým dopadem (obchodní dohody).
-NEZAŘAZUJ diplomatické cesty, politické návštěvy ani společenské akce
-bez přímého dopadu na trhy.
-
-Pro každou událost objekt:
-   - "datum": konkrétní datum "YYYY-MM-DD", nebo orientační text
-     ("tento týden", "příští týden"), pokud si přesným datem nejsi jistý
-   - "nazev": stručný český popis (max 10 slov)
-   - "nazev_en": totéž anglicky
-
-DŮLEŽITÉ: Uváděj jen události, které vyplývají ze zpráv v seznamu níže,
-nebo pravidelné termíny, kterými si jsi opravdu jistý. Nevymýšlej si
-konkrétní data — raději napiš orientační text. Seřaď od nejbližší.
-
-Odpověz POUZE platným JSON polem objektů, bez jakéhokoli dalšího textu.
-
-SEZNAM ZPRÁV:
-{seznam}"""
-
-    print(f"Volání 3/4: kalendář Co sledovat ({MODEL})...")
-    surove_sledovat = _zavolej_clauda(client, prompt_sledovat)
-    sledovat = [
-        {"datum": s.get("datum", ""), "nazev": s.get("nazev", ""),
-         "nazev_en": s.get("nazev_en", s.get("nazev", ""))}
-        for s in surove_sledovat if s.get("nazev")
-    ][:8]
-
-    # ---------- Volání 4: kontrola faktů proti originálům ----------
+    # ---------- Volání 3: kontrola faktů proti originálům ----------
     try:
         vysledek, aktuality = _zkontroluj_fakta(
             client, vysledek, aktuality, zpravy, cache)
@@ -440,7 +425,7 @@ Odpověz POUZE platným JSON polem, escapuj uvozovky uvnitř textů.
 POLOŽKY:
 {chr(10).join(polozky)}"""
 
-    print(f"Volání 4/4: kontrola faktů ({MODEL})...")
+    print(f"Volání 3/3: kontrola faktů ({MODEL})...")
     kontrola = _zavolej_clauda(client, prompt)
 
     opravy, smazano = 0, 0
