@@ -378,9 +378,9 @@ CSS = """
   }
   .ukazatel:hover .skryj { opacity: .7; }
   .skryj:hover { opacity: 1 !important; color: #b0413e; }
-  .skryte-obal {
+  .pridat-obal {
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-    margin: -14px 0 20px;
+    margin: -14px 0 14px;
   }
   .skryty-chip {
     border: 1px dashed var(--okraj); background: transparent;
@@ -389,6 +389,15 @@ CSS = """
     transition: color .2s ease, border-color .2s ease;
   }
   .skryty-chip:hover { color: var(--text); border-color: var(--seda); }
+  #pridat-radek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  #pridat-radek.skryta { display: none; }
+  .hledat {
+    border: 1px solid var(--okraj); background: var(--karta); color: var(--text);
+    border-radius: 999px; padding: 6px 14px; font-size: 0.85rem;
+    outline: none; width: 200px;
+    transition: border-color .2s ease, background-color .45s ease;
+  }
+  .hledat:focus { border-color: var(--seda); }
   .tip-pridani { font-size: 0.8rem; color: var(--seda); margin: -8px 0 26px; }
 
   /* ---------- Jazykové verze ---------- */
@@ -471,9 +480,23 @@ JS = """
 
     function vykresli(karta) {
       var i = +karta.dataset.i;
+      var zaznam = TRHY[i];
       var aktivni = karta.querySelector(".rozsah.aktivni");
       var dny = aktivni ? +aktivni.dataset.dny : 66;
-      var body = (TRHY[i].historie || []);
+      var body = (zaznam.historie || []);
+      // Tituly "na přání": historie se stáhne, až je karta poprvé vidět
+      if (!body.length && zaznam.soubor && !zaznam.nacitaSe
+          && !karta.classList.contains("skryta")) {
+        zaznam.nacitaSe = true;
+        fetch(zaznam.soubor)
+          .then(function (r) { return r.json(); })
+          .then(function (h) { zaznam.historie = h; vykresli(karta); })
+          .catch(function () {
+            var od = karta.querySelector(".g-od");
+            if (od) od.textContent = "graf dostupný jen na webu";
+          });
+        return;
+      }
       if (dny > 0) body = body.slice(-dny);
       var svg = karta.querySelector(".graf");
       if (!svg || body.length < 2) return;
@@ -547,53 +570,105 @@ JS = """
           vykresli(karta);
         });
       });
-      vykresli(karta);
+      // Výchozí karty vykreslíme hned; katalogové až po přidání
+      if (karta.dataset.vychozi === "1") vykresli(karta);
       zapniCteniMysi(karta);
     });
+    window._vykresliUkazatel = vykresli;
   })();
 
-  // ---- Skrývání ukazatelů (pamatuje se v prohlížeči) ----
+  // ---- Personalizace ukazatelů (každý návštěvník ve svém prohlížeči) ----
   (function () {
     var karty = document.querySelectorAll(".ukazatel");
     if (!karty.length) return;
-    var obal = document.getElementById("skryte-obal");
-    var radek = document.getElementById("skryte-radek");
+    var pridatBtn = document.getElementById("pridat-btn");
+    var pridatRadek = document.getElementById("pridat-radek");
+    var rozbaleno = false;
 
-    function nactiSkryte() {
-      try { return JSON.parse(localStorage.getItem("skryteUkazatele") || "[]"); }
-      catch (e) { return []; }
+    function nactiVolbu() {
+      try {
+        var v = JSON.parse(localStorage.getItem("tickeryVolba") || "{}");
+        return { skryte: v.skryte || [], pridane: v.pridane || [] };
+      } catch (e) { return { skryte: [], pridane: [] }; }
     }
-    function ulozSkryte(s) { localStorage.setItem("skryteUkazatele", JSON.stringify(s)); }
+    function ulozVolbu(v) { localStorage.setItem("tickeryVolba", JSON.stringify(v)); }
 
-    function prekresliSkryte() {
-      var skryte = nactiSkryte();
+    function jeViditelna(k, v) {
+      var vychozi = k.dataset.vychozi === "1";
+      var n = k.dataset.nazev;
+      return vychozi ? v.skryte.indexOf(n) === -1
+                     : v.pridane.indexOf(n) !== -1;
+    }
+
+    // Vyhledávací pole pro katalog (stovky titulů)
+    var hledat = document.createElement("input");
+    hledat.className = "hledat";
+    hledat.placeholder = "Hledat titul… / Search…";
+    hledat.addEventListener("input", function () { prekresliVolbu(); });
+
+    function prekresliVolbu() {
+      var v = nactiVolbu();
+      var keSkryti = [];
       karty.forEach(function (k) {
-        k.classList.toggle("skryta", skryte.indexOf(k.dataset.nazev) !== -1);
+        var viditelna = jeViditelna(k, v);
+        var byla = !k.classList.contains("skryta");
+        k.classList.toggle("skryta", !viditelna);
+        if (!viditelna) keSkryti.push(k.dataset.nazev);
+        // Nově zviditelněná karta: dokreslit graf (případně stáhnout data)
+        if (viditelna && !byla && window._vykresliUkazatel)
+          window._vykresliUkazatel(k);
       });
-      radek.innerHTML = "";
-      skryte.forEach(function (nazev) {
+      var dotaz = hledat.value.trim().toLowerCase();
+      var shody = keSkryti.filter(n => n.toLowerCase().indexOf(dotaz) !== -1);
+      pridatRadek.innerHTML = "";
+      pridatRadek.appendChild(hledat);
+      shody.slice(0, 30).forEach(function (nazev) {
         var chip = document.createElement("button");
         chip.className = "skryty-chip";
         chip.textContent = "+ " + nazev;
         chip.addEventListener("click", function () {
-          ulozSkryte(nactiSkryte().filter(n => n !== nazev));
-          prekresliSkryte();
+          var v = nactiVolbu();
+          var karta = Array.from(karty).find(k => k.dataset.nazev === nazev);
+          if (karta && karta.dataset.vychozi === "1")
+            v.skryte = v.skryte.filter(n => n !== nazev);
+          else if (v.pridane.indexOf(nazev) === -1)
+            v.pridane.push(nazev);
+          ulozVolbu(v);
+          prekresliVolbu();
         });
-        radek.appendChild(chip);
+        pridatRadek.appendChild(chip);
       });
-      obal.style.display = skryte.length ? "flex" : "none";
+      if (shody.length > 30) {
+        var vic = document.createElement("span");
+        vic.className = "akt-popisek";
+        vic.textContent = "+" + (shody.length - 30) + " dalších — upřesni hledání";
+        pridatRadek.appendChild(vic);
+      }
+      pridatBtn.style.display = keSkryti.length ? "" : "none";
+      pridatRadek.classList.toggle("skryta", !rozbaleno || !keSkryti.length);
     }
+
+    pridatBtn.addEventListener("click", function () {
+      rozbaleno = !rozbaleno;
+      prekresliVolbu();
+      if (rozbaleno) hledat.focus();
+    });
 
     karty.forEach(function (k) {
       var btn = k.querySelector(".skryj");
       if (btn) btn.addEventListener("click", function () {
-        var s = nactiSkryte();
-        if (s.indexOf(k.dataset.nazev) === -1) s.push(k.dataset.nazev);
-        ulozSkryte(s);
-        prekresliSkryte();
+        var v = nactiVolbu();
+        var n = k.dataset.nazev;
+        if (k.dataset.vychozi === "1") {
+          if (v.skryte.indexOf(n) === -1) v.skryte.push(n);
+        } else {
+          v.pridane = v.pridane.filter(x => x !== n);
+        }
+        ulozVolbu(v);
+        prekresliVolbu();
       });
     });
-    prekresliSkryte();
+    prekresliVolbu();
   })();
 
   // ---- Tmavý režim a jazyk (pamatují se, platí pro obě stránky) ----
@@ -639,7 +714,7 @@ def _kostra(data, aktivni_stranka, obsah):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Můj přehled zpráv</title>
+<title>Denní briefing — vše podstatné na jednom místě</title>
 <style>{CSS}</style>
 </head>
 <body>
@@ -649,9 +724,10 @@ def _kostra(data, aktivni_stranka, obsah):
     <button class="prepinac" id="rezim" title="Tmavý/světlý režim">🌙</button>
   </div>
   <header class="hlavicka">
-    <div class="nadtitulek"><span class="l-cs">Osobní výběr</span><span class="l-en">Personal briefing</span></div>
-    <h1><span class="l-cs">Můj přehled zpráv</span><span class="l-en">My News Digest</span></h1>
-    <div class="cas"><span class="l-cs">Vygenerováno</span><span class="l-en">Generated</span> {data["vygenerovano"]}</div>
+    <div class="nadtitulek">dennibriefing.cz</div>
+    <h1><span class="l-cs">Denní briefing</span><span class="l-en">Daily Briefing</span></h1>
+    <div class="cas"><span class="l-cs">Vše podstatné ze světa i Česka</span><span class="l-en">Everything that matters, worldwide and Czech</span></div>
+    <div class="cas"><span class="l-cs">Vydáno</span><span class="l-en">Published</span> {data["vygenerovano"]}</div>
   </header>
   <nav class="stranky">
     <div class="stranky-vnitrek">
@@ -807,8 +883,18 @@ def vytvor_data_html(data):
                 procenta = f"{abs(t['zmena_pct']):.2f}".replace(".", ",")
                 zmena = f'<span class="zmena {smer}">{znak} {procenta} %</span>'
             graf = ""
-            if t.get("historie"):
-                graf = """
+            if t.get("historie") or t.get("soubor"):
+                if t.get("frekvence") == "mesicni":
+                    rozsahy = ('<button class="rozsah" data-dny="12">1R</button>'
+                               '<button class="rozsah aktivni" data-dny="60">5R</button>'
+                               '<button class="rozsah" data-dny="120">10R</button>'
+                               '<button class="rozsah" data-dny="0">Max</button>')
+                else:
+                    rozsahy = ('<button class="rozsah" data-dny="22">1M</button>'
+                               '<button class="rozsah aktivni" data-dny="66">3M</button>'
+                               '<button class="rozsah" data-dny="252">1R</button>'
+                               '<button class="rozsah" data-dny="0">5R</button>')
+                graf = f"""
       <div class="graf-obal">
         <svg class="graf" viewBox="0 0 320 90" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="graf-svisla"></div>
@@ -817,20 +903,20 @@ def vytvor_data_html(data):
       </div>
       <div class="graf-popisky"><span class="g-od"></span><span class="g-do"></span></div>
       <div class="rozsahy">
-        <button class="rozsah" data-dny="22">1M</button>
-        <button class="rozsah aktivni" data-dny="66">3M</button>
-        <button class="rozsah" data-dny="252">1R</button>
-        <button class="rozsah" data-dny="0">5R</button>
+        {rozsahy}
       </div>"""
+            vychozi = "1" if t.get("vychozi", True) else "0"
             karty_ukazatelu.append(f"""\
-    <article class="ukazatel" data-i="{i}" data-nazev="{e(t['nazev'])}">
+    <article class="ukazatel" data-i="{i}" data-nazev="{e(t['nazev'])}" data-vychozi="{vychozi}">
       <button class="skryj" title="Skrýt ukazatel / Hide">×</button>
       <div class="ukazatel-nazev">{e(t['nazev'])}</div>
       <div class="ukazatel-radek"><span class="ukazatel-hodnota">{e(t['hodnota'])}</span>{zmena}</div>{graf}
     </article>""")
-        # Historii vložíme na stránku jako JSON pro vykreslování grafů
+        # Historii vložíme na stránku jako JSON; tituly "na přání" mají
+        # místo historie odkaz na soubor (stáhne se, až je někdo přidá)
         json_trhy = json.dumps(
-            [{"historie": t.get("historie", [])} for t in trhy],
+            [{"historie": t.get("historie", []),
+              "soubor": t.get("soubor", "")} for t in trhy],
             ensure_ascii=False, separators=(",", ":"),
         ).replace("</", "<\\/")
         sekce_trhy = f"""
@@ -838,13 +924,14 @@ def vytvor_data_html(data):
   <main class="ukazatele">
 {chr(10).join(karty_ukazatelu)}
   </main>
-  <div class="skryte-obal" id="skryte-obal" style="display:none">
-    <span class="akt-popisek"><span class="l-cs">Skryté (klikni pro vrácení):</span><span class="l-en">Hidden (click to restore):</span></span>
-    <span id="skryte-radek"></span>
+  <div class="pridat-obal">
+    <button class="prepinac" id="pridat-btn">＋ <span class="l-cs">Přidat ukazatel</span><span class="l-en">Add indicator</span></button>
+    <span id="pridat-radek" class="skryta"></span>
   </div>
-  <p class="tip-pridani"><span class="l-cs">Nový titul přidáš řádkem v souboru
-  tickery.txt a spuštěním generování.</span><span class="l-en">Add a new ticker
-  by editing tickery.txt and re-running the generator.</span></p>
+  <p class="tip-pridani"><span class="l-cs">Výběr ukazatelů se ukládá jen ve tvém
+  prohlížeči — každý návštěvník si stránku přizpůsobí po svém.</span><span
+  class="l-en">Your selection is stored in your browser only — every visitor
+  customises their own view.</span></p>
   <script id="trhy-data" type="application/json">{json_trhy}</script>"""
 
     if not sekce_kalendar and not sekce_trhy:
