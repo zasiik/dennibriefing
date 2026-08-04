@@ -1,0 +1,36 @@
+# ============================================================
+# KATALOG UKAZATELŮ na stránce Data.
+# Formát:  Název | symbol Yahoo | symbol stooq | výchozí
+#   - "výchozí" = ano: karta je vidět hned
+#   - "výchozí" = ne:  stáhne se, ale návštěvník si ji musí přidat
+#     tlačítkem "Přidat ukazatel" (volba se mu uloží v prohlížeči)
+# Přidání titulu: dopiš řádek a spusť  python3 generuj_web.py
+# Symboly najdeš na finance.yahoo.com (TSLA, ETH-USD, JPYCZK=X...)
+# ============================================================
+
+# --- Výchozí sada ---
+S&P 500       | ^GSPC    | ^spx    | ano
+Nasdaq 100    | ^NDX     | ^ndq    | ano
+USD/CZK       | CZK=X    | usdczk  | ano
+EUR/CZK       | EURCZK=X | eurczk  | ano
+Ropa Brent    | BZ=F     | cb.f    | ano
+Zlato         | GC=F     | xauusd  | ano
+Bitcoin       | BTC-USD  | btcusd  | ano
+Apple         | AAPL     | aapl.us | ano
+Microsoft     | MSFT     | msft.us | ano
+NVIDIA        | NVDA     | nvda.us | ano
+
+# --- Na přání (návštěvník si přidá sám) ---
+Dow Jones     | ^DJI     | ^dji    | ne
+DAX           | ^GDAXI   | ^dax    | ne
+EUR/USD       | EURUSD=X | eurusd  | ne
+US 10Y výnos  | ^TNX     |         | ne
+VIX           | ^VIX     |         | ne
+Stříbro       | SI=F     | xagusd  | ne
+Ethereum      | ETH-USD  | ethusd  | ne
+Tesla         | TSLA     | tsla.us | ne
+Amazon        | AMZN     | amzn.us | ne
+Alphabet      | GOOGL    | googl.us| ne
+Meta          | META     | meta.us | ne
+ČEZ           | CEZ.PR   |         | ne
+Komerční banka| KOMB.PR  |         | ne

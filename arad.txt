@@ -1,0 +1,17 @@
+# ============================================================
+# ČNB ARAD — časové řady na stránce Data.
+# Formát řádku:   Název | identifikátor ukazatele | jednotka
+#
+# Jak najít identifikátor:
+#   1. Otevři https://www.cnb.cz/arad/ a přihlas se
+#   2. Vyhledej ukazatel (např. "repo sazba") a otevři jeho detail
+#   3. Na detailu je "Identifikátor" — zkopíruj ho a vlož sem
+#
+# Potřebný klíč: v ARAD účtu si vygeneruj API klíč a přidej ho
+# do souboru .env jako řádek:  ARAD_API_KEY=tvůj-klíč
+#
+# Až odkomentuješ (smažeš # na začátku) a doplníš ID, ukazatel
+# se objeví po dalším generování. Příklady k doplnění:
+# ============================================================
+# Repo sazba ČNB 2T | SEM-VLOZ-ID | %
+# Hypoteční sazby | SEM-VLOZ-ID | %
