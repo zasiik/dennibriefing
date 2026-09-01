@@ -6,3 +6,11 @@ env-vzor.txt
 preklady_cache.json
 __pycache__/
 .DS_Store
+
+# Generované výstupy (vytváří je GitHub při každém běhu)
+index.html
+data.html
+data.json
+hledani.json
+archiv/
+trhy_data/

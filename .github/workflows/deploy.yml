@@ -1,11 +1,14 @@
 name: Build a nasazení webu
 
-# Kdy se má spustit: přesně v 8:30 českého času ho spouští externí
-# plánovač cron-job.org (přes GitHub API). Tady zůstává jen možnost
-# ručního spuštění tlačítkem "Run workflow" v záložce Actions —
-# tu používá i cron-job.org.
+# Kdy se má spustit:
+#  - ráno v 8:30 českého času přes cron-job.org (workflow_dispatch)
+#  - ručně tlačítkem "Run workflow" (workflow_dispatch)
+#  - po každém nahrání změn (push) — to jen PŘESTAVÍ stránky
+#    z existujících dat, NEVOLÁ placené API (viz kroky níže)
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 # Oprávnění nutná pro nasazení na GitHub Pages
 permissions:
@@ -56,11 +59,35 @@ jobs:
           restore-keys: |
             archiv-
 
-      - name: Vygenerovat web
+      # Uchová poslední vygenerovaná data — po pushi se z nich web
+      # přestaví zadarmo, bez volání Claude API
+      - name: Obnovit poslední data
+        uses: actions/cache@v4
+        with:
+          path: |
+            data.json
+            trhy_data
+          key: data-${{ github.run_id }}
+          restore-keys: |
+            data-
+
+      # Ranní/ruční běh: plné generování (stahuje zprávy, volá Claude API)
+      - name: Vygenerovat web (plný běh)
+        if: github.event_name != 'push'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ARAD_API_KEY: ${{ secrets.ARAD_API_KEY }}
         run: python3 generuj_web.py
+
+      # Po nahrání změn: jen přestavět stránky z posledních dat — ZDARMA.
+      # Kdyby data v cache chyběla, vezmou se rovnou z živého webu.
+      - name: Přestavět stránky (po nahrání změn, bez API)
+        if: github.event_name == 'push'
+        run: |
+          if [ ! -f data.json ]; then
+            curl -fsSL https://dennibriefing.cz/data.json -o data.json
+          fi
+          python3 generuj_web.py --jen-html
 
       # Do složky "public" dáme jen hotové stránky (ne zdrojové skripty)
       - name: Připravit složku k publikování
