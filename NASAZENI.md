@@ -139,36 +139,30 @@ nikdo ho neuvidí.
 # Podcast – audio verze briefingu
 
 Každé ráno po vygenerování webu napíše Claude z aktualit ~5minutový mluvený
-text, hlasová služba ho namluví do MP3 a na webu se objeví přehrávač.
-Zároveň vznikne podcastový feed **https://dennibriefing.cz/podcast.xml**,
-který jde přidat do Apple Podcasts i Spotify. Kód je v `podcast.py`,
-nastavení v `config.py` (sekce PODCAST).
+text, open-source hlas **Piper** ho přímo na GitHubu namluví do MP3 a na webu
+se nad aktualitami objeví přehrávač. Zároveň vznikne podcastový feed
+**https://dennibriefing.cz/podcast.xml**. Kód je v `podcast.py`, nastavení
+v `config.py` (sekce PODCAST).
 
-Dokud nevložíš klíč hlasové služby, podcast se tiše přeskakuje a web
-běží jako dřív.
+## Krok 1 – Nic, běží to samo a zdarma
 
-## Krok 1 – Hlas přes Azure (zdarma)
+Piper nepotřebuje žádný účet ani klíč. Model hlasu (~60 MB) se při prvním
+běhu stáhne a pak leží v cache na GitHubu. Namluvení trvá asi půl minuty.
 
-Azure dává 0,5 milionu znaků měsíčně zdarma; briefing spotřebuje asi
-110 tisíc. Registrace chce platební kartu, ale tarif **Free F0** nic nestojí.
+- **Hlas:** `PODCAST_PIPER_HLAS` – `cs_CZ-jirka-medium` (mužský, výchozí)
+  nebo `cs_CZ-kasandra-medium` (ženský; u něj nastav `PODCAST_PIPER_RYCHLOST = 1.0`).
+- **Tempo:** `PODCAST_PIPER_RYCHLOST` – menší číslo = rychleji.
+- **Výslovnost cizích slov:** Piper čte vše po česky, takže anglická jména
+  přepisuje podle slovníku `PODCAST_VYSLOVNOST` (např. Microsoft → Majkrosoft).
+  Když nějaké jméno zní špatně, dopiš ho tam.
+- Chceš epizodu hned, ne až ráno? **Actions → Run workflow.**
 
-1. Na **portal.azure.com** si založ účet a přihlas se.
-2. **Create a resource** → vyhledej **Speech** (Azure AI Speech) → **Create**.
-3. **Region:** West Europe · **Pricing tier:** Free F0 · název libovolný → **Create**.
-4. V hotovém prostředku otevři **Keys and Endpoint** a zkopíruj **KEY 1**.
-5. Na GitHubu: **Settings → Secrets and variables → Actions → New repository secret**
-   - **Name:** `AZURE_SPEECH_KEY` · **Secret:** zkopírovaný klíč.
-6. Pokud jsi zvolil jiný region než West Europe, přepiš v `config.py`
-   řádek `PODCAST_AZURE_REGION` (např. `"germanywestcentral"`).
-7. **Actions → Build a nasazení webu → Run workflow.** V logu hledej
-   „Epizoda hotová". Na webu se nad aktualitami objeví přehrávač.
-
-Hlas změníš v `config.py`: `cs-CZ-AntoninNeural` (mužský) nebo
-`cs-CZ-VlastaNeural` (ženský). Rychlost řeči: `PODCAST_AZURE_RYCHLOST`.
-
-> Přirozenější (placený) hlas: založ účet na elevenlabs.io, vyber hlas
-> a zkopíruj jeho Voice ID. V `config.py` nastav `PODCAST_HLAS_SLUZBA = "elevenlabs"`
-> a `PODCAST_ELEVENLABS_HLAS`, na GitHub přidej secret `ELEVENLABS_API_KEY`.
+> Přirozenější hlas (volitelné): Azure (0,5 mil. znaků měsíčně zdarma, účet
+> chce kartu) nebo ElevenLabs (placené). V `config.py` přepni
+> `PODCAST_HLAS_SLUZBA` na `"azure"` / `"elevenlabs"` a na GitHub přidej secret
+> `AZURE_SPEECH_KEY` / `ELEVENLABS_API_KEY`. Pro Azure: portal.azure.com →
+> Create a resource → Speech → tarif Free F0, region West Europe → Keys and
+> Endpoint → KEY 1.
 
 ## Krok 2 – Apple Podcasts a Spotify (až vyjde první epizoda)
 

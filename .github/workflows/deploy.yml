@@ -69,6 +69,16 @@ jobs:
           restore-keys: |
             podcast-
 
+      # Model hlasu Piper (~60 MB) – stáhne se jednou, pak se bere z cache.
+      # Změna config.py vytvoří novou cache (kdyby se měnil hlas).
+      - name: Obnovit hlas pro podcast
+        uses: actions/cache@v4
+        with:
+          path: hlasy
+          key: hlasy-${{ hashFiles('config.py') }}
+          restore-keys: |
+            hlasy-
+
       # Uchová poslední vygenerovaná data — po pushi se z nich web
       # přestaví zadarmo, bez volání Claude API
       - name: Obnovit poslední data
@@ -87,7 +97,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ARAD_API_KEY: ${{ secrets.ARAD_API_KEY }}
-          # Hlas pro podcast – stačí jeden z nich (viz config.py)
+          # Placené hlasy pro podcast (nepovinné – výchozí Piper je zdarma)
           AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: python3 generuj_web.py

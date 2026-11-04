@@ -19,3 +19,6 @@ trhy_data/
 podcast/
 podcast.xml
 ukazka.mp3
+
+# Modely hlasu Piper (stahují se samy, na GitHubu leží v cache)
+hlasy/

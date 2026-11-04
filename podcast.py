@@ -2,16 +2,18 @@
 # PODCAST – audio verze denního briefingu.
 #
 #   1. Claude napíše z dnešních aktualit ~5minutový mluvený text
-#   2. Hlasová služba (Azure nebo ElevenLabs) z něj udělá MP3
+#   2. Hlas z něj udělá MP3 – výchozí je Piper (open source, zdarma,
+#      běží přímo na GitHubu); volitelně Azure nebo ElevenLabs
 #   3. Epizoda se uloží do složky podcast/ a přidá do podcast.xml
 #      (RSS feed, který jde přidat do Apple Podcasts i Spotify)
 #
-# Nastavení je v config.py (sekce PODCAST). Klíče se čtou z .env
-# nebo z GitHub secrets:  AZURE_SPEECH_KEY  /  ELEVENLABS_API_KEY
-# Když klíč chybí, podcast se tiše přeskočí a web se vytvoří normálně.
+# Nastavení je v config.py (sekce PODCAST). Piper žádný klíč nepotřebuje;
+# Azure / ElevenLabs čtou klíč z .env nebo GitHub secrets
+# (AZURE_SPEECH_KEY / ELEVENLABS_API_KEY). Když cokoli selže, web se
+# vytvoří normálně, jen bez nové epizody.
 #
 # Vyzkoušení na vlastním počítači (ve složce projektu):
-#   python3 podcast.py --ukazka       namluví jednu větu do ukazka.mp3
+#   python3 podcast.py --ukazka       namluví krátkou ukázku do ukazka.mp3
 #   python3 podcast.py --jen-scenar   napíše a vypíše text (volá Clauda)
 #   python3 podcast.py                celá epizoda z aktuálního data.json
 # ============================================================
@@ -43,13 +45,16 @@ def _nastaveni(nazev, vychozi):
 
 
 ZAPNUTO = _nastaveni("PODCAST_ZAPNUTY", True)
-SLUZBA = _nastaveni("PODCAST_HLAS_SLUZBA", "azure").strip().lower()
+SLUZBA = _nastaveni("PODCAST_HLAS_SLUZBA", "piper").strip().lower()
+PIPER_HLAS = _nastaveni("PODCAST_PIPER_HLAS", "cs_CZ-jirka-medium").strip()
+PIPER_RYCHLOST = float(_nastaveni("PODCAST_PIPER_RYCHLOST", 0.85))
+VYSLOVNOST = _nastaveni("PODCAST_VYSLOVNOST", {})
 AZURE_HLAS = _nastaveni("PODCAST_AZURE_HLAS", "cs-CZ-AntoninNeural")
 AZURE_REGION = _nastaveni("PODCAST_AZURE_REGION", "westeurope")
 AZURE_RYCHLOST = _nastaveni("PODCAST_AZURE_RYCHLOST", "+0%")
 ELEVEN_HLAS = _nastaveni("PODCAST_ELEVENLABS_HLAS", "")
 ELEVEN_MODEL = _nastaveni("PODCAST_ELEVENLABS_MODEL", "eleven_multilingual_v2")
-DELKA_SLOV = _nastaveni("PODCAST_DELKA_SLOV", (650, 800))
+DELKA_SLOV = _nastaveni("PODCAST_DELKA_SLOV", (520, 620))
 POCET_EPIZOD = _nastaveni("PODCAST_POCET_EPIZOD", 30)
 NAZEV = _nastaveni("PODCAST_NAZEV", "Denní briefing")
 POPIS = _nastaveni("PODCAST_POPIS", "")
@@ -68,6 +73,16 @@ _PLATNY_SOUBOR = re.compile(r"^podcast/\d{4}-\d{2}-\d{2}\.(mp3|txt)$")
 # Formáty zvuku: (formát pro službu, datový tok v bitech/s pro výpočet délky)
 _AZURE_FORMAT = ("audio-24khz-48kbitrate-mono-mp3", 48000)
 _ELEVEN_FORMAT = ("mp3_44100_64", 64000)
+_PIPER_KBPS = 48
+
+# Hlasy Piper: odkud se stahují a jak je správně uvést (licence)
+HLASY_SLOZKA = "hlasy"
+_PIPER_ZDROJ = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+_PIPER_AUTORI = {
+    "cs_CZ-jirka-medium": "Hlas Jirka (Piper, licence CC0).",
+    "cs_CZ-kasandra-medium": ("Hlas Kasandra © Ondřej Šimek, licence CC BY 4.0 "
+                              "(Piper)."),
+}
 
 DNY = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
 MESICE_2P = ["", "ledna", "února", "března", "dubna", "května", "června",
@@ -235,7 +250,9 @@ PSANÍ PRO UCHO:
 - Zkratky rozepiš: Česká národní banka, Evropská centrální banka, Český
   statistický úřad, Spojené státy… Zkratky, které se čtou jako slovo (NATO,
   Fed), můžeš nechat.
-- Cizí jména a názvy firem ponech v původní podobě.
+- Cizí jména a názvy firem ponech v původní podobě. Anglický žargon nahraď
+  českým výrazem („termínové kontrakty" místo futures, „šéf" místo CEO,
+  „umělá inteligence" místo AI).
 
 FAKTICKÁ KÁZEŇ: Používej VÝHRADNĚ informace z podkladů. Nic nedomýšlej –
 žádná čísla, jména ani souvislosti navíc. Když si nejsi jistý, zprávu vynech.
@@ -292,12 +309,86 @@ def napis_scenar(data, vydano):
 
 
 # ------------------------------------------------------------
-# Krok 2: namluvení (Azure nebo ElevenLabs)
+# Krok 2: namluvení (Piper, Azure nebo ElevenLabs)
 # ------------------------------------------------------------
 def _klic():
     if SLUZBA == "elevenlabs":
         return os.environ.get("ELEVENLABS_API_KEY", "").strip()
     return os.environ.get("AZURE_SPEECH_KEY", "").strip()
+
+
+def _chybi_pro_hlas():
+    """Co chybí, aby šlo namluvit (prázdný text = vše připraveno)."""
+    if SLUZBA == "piper":
+        try:
+            import piper, lameenc   # noqa: F401
+        except ImportError:
+            return "chybí balíčky piper-tts a lameenc (requirements.txt)"
+        return ""
+    if not _klic():
+        return ("chybí klíč " + ("ELEVENLABS_API_KEY" if SLUZBA == "elevenlabs"
+                                 else "AZURE_SPEECH_KEY"))
+    return ""
+
+
+def _vyslovnost(text):
+    """Cizí slova přepíše tak, jak se mají vyslovit (jen pro Piper).
+    Klíč se hledá na začátku slova, takže 'Trump' pokryje i 'Trumpa'."""
+    for slovo, vyslovit in VYSLOVNOST.items():
+        text = re.sub(r"(?<!\w)" + re.escape(slovo), vyslovit, text)
+    return text
+
+
+def _stahni_hlas_piper():
+    """Stáhne model hlasu (jednou, pak leží v cache na GitHubu)."""
+    shoda = re.fullmatch(r"([a-z]{2})_([A-Z]{2})-([\w]+)-(x_low|low|medium|high)",
+                         PIPER_HLAS)
+    if not shoda:
+        raise RuntimeError(f"neznámý hlas Piper {PIPER_HLAS!r}")
+    jazyk, zeme, mluvci, kvalita = shoda.groups()
+    zdroj = (f"{_PIPER_ZDROJ}{jazyk}/{jazyk}_{zeme}/{mluvci}/{kvalita}/"
+             f"{PIPER_HLAS}")
+    os.makedirs(HLASY_SLOZKA, exist_ok=True)
+    for pripona in (".onnx.json", ".onnx"):
+        cil = os.path.join(HLASY_SLOZKA, PIPER_HLAS + pripona)
+        if os.path.exists(cil) and os.path.getsize(cil) > 0:
+            continue
+        print(f"  Stahuji hlas {PIPER_HLAS}{pripona}…", flush=True)
+        obsah = _posli(urllib.request.Request(
+            zdroj + pripona, headers={"User-Agent": "dennibriefing.cz"}),
+            f"Stažení hlasu {PIPER_HLAS}", pokusu=4)
+        with open(cil + ".castecne", "wb") as f:
+            f.write(obsah)
+        os.replace(cil + ".castecne", cil)
+    return os.path.join(HLASY_SLOZKA, PIPER_HLAS + ".onnx")
+
+
+def _namluv_piper(odstavce):
+    import lameenc
+    import numpy as np
+    from piper import PiperVoice, SynthesisConfig
+
+    hlas = PiperVoice.load(_stahni_hlas_piper())
+    vzorkovani = hlas.config.sample_rate
+    nastaveni = SynthesisConfig(length_scale=PIPER_RYCHLOST)
+
+    def ticho(sekund):
+        return np.zeros(int(vzorkovani * sekund), dtype=np.int16)
+
+    kusy = [ticho(0.4)]
+    for odstavec in odstavce:
+        for veta in hlas.synthesize(_vyslovnost(odstavec), nastaveni):
+            kusy += [veta.audio_int16_array, ticho(0.28)]
+        kusy.append(ticho(0.6))            # delší pauza mezi zprávami
+    pcm = np.concatenate(kusy)
+
+    kodek = lameenc.Encoder()
+    kodek.set_bit_rate(_PIPER_KBPS)
+    kodek.set_in_sample_rate(vzorkovani)
+    kodek.set_channels(1)
+    kodek.set_quality(2)
+    zvuk = bytes(kodek.encode(pcm.tobytes()) + kodek.flush())
+    return zvuk, _PIPER_KBPS * 1000
 
 
 def _useky(odstavce, max_znaku=2500):
@@ -385,6 +476,8 @@ def _namluv_elevenlabs(odstavce, klic):
 
 def namluv(odstavce):
     """Vrátí (MP3 bajty, datový tok). Služba podle config.py."""
+    if SLUZBA == "piper":
+        return _namluv_piper(odstavce)
     klic = _klic()
     if SLUZBA == "elevenlabs":
         return _namluv_elevenlabs(odstavce, klic)
@@ -400,12 +493,14 @@ def vytvor_epizodu(soubor_dat="data.json"):
     if not ZAPNUTO:
         print("Podcast: vypnutý v config.py.")
         return False
-    if not _klic():
-        jmeno = "ELEVENLABS_API_KEY" if SLUZBA == "elevenlabs" else "AZURE_SPEECH_KEY"
-        print(f"Podcast: chybí klíč {jmeno} – přeskakuji (web se vytvoří normálně).")
+    chybi = _chybi_pro_hlas()
+    if chybi:
+        print(f"Podcast: {chybi} – přeskakuji (web se vytvoří normálně).")
         return False
     try:
         obnov_z_webu()
+        if SLUZBA == "piper":
+            _stahni_hlas_piper()   # hlas připravit dřív, než se zaplatí scénář
         with open(soubor_dat, encoding="utf-8") as f:
             data = json.load(f)
         if not data.get("aktuality"):
@@ -417,7 +512,7 @@ def vytvor_epizodu(soubor_dat="data.json"):
         print("Podcast 1/2: píšu scénář…", flush=True)
         scenar = napis_scenar(data, vydano)
         znaku = sum(len(o) for o in scenar["odstavce"])
-        hlas = ELEVEN_HLAS if SLUZBA == "elevenlabs" else AZURE_HLAS
+        hlas = {"piper": PIPER_HLAS, "elevenlabs": ELEVEN_HLAS}.get(SLUZBA, AZURE_HLAS)
         print(f"Podcast 2/2: namlouvám ({SLUZBA}, {hlas}, {znaku} znaků)…", flush=True)
         zvuk, tok = namluv(scenar["odstavce"])
         if len(zvuk) < 50_000:
@@ -440,6 +535,7 @@ def vytvor_epizodu(soubor_dat="data.json"):
             "prepis": prepis,
             "velikost": len(zvuk),
             "delka_s": round(len(zvuk) * 8 / tok),
+            "hlas": hlas,
         }
         epizody = [e for e in nacti_epizody() if e.get("datum") != iso]
         epizody.append(epizoda)
@@ -470,6 +566,8 @@ def _popis_epizody(ep):
     radky.append(f"Celý briefing s odkazy na zdroje najdete na {WEB}")
     radky.append("Text připravuje umělá inteligence ze zpravodajských "
                  "zdrojů, čte ho syntetický hlas.")
+    if ep.get("hlas") in _PIPER_AUTORI:
+        radky.append(_PIPER_AUTORI[ep["hlas"]])
     return "\n\n".join(radky)
 
 
@@ -575,13 +673,13 @@ def html_prehravace(data, zaklad=""):
 # ------------------------------------------------------------
 if __name__ == "__main__":
     if "--ukazka" in sys.argv:
-        if not _klic():
-            sys.exit("Chybí klíč hlasové služby (AZURE_SPEECH_KEY nebo "
-                     "ELEVENLABS_API_KEY v souboru .env).")
+        if _chybi_pro_hlas():
+            sys.exit(f"Nejde namluvit: {_chybi_pro_hlas()}.")
         zvuk, _ = namluv([
             "Dobré ráno, tohle je ukázka hlasu pro podcast Denní briefing.",
             "Takhle bude znít každé ranní vydání: zprávy ze světa, z Česka "
-            "a z trhů za pět minut."])
+            "a z trhů za pět minut. Česká národní banka, Wall Street, "
+            "Microsoft, Nvidia a OpenAI."])
         with open("ukazka.mp3", "wb") as f:
             f.write(zvuk)
         print(f"Uloženo ukazka.mp3 ({len(zvuk) / 1000:.0f} kB) – pusť si ho.")
