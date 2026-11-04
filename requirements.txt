@@ -1,2 +1,5 @@
 anthropic
 feedparser
+# hlas pro podcast (open source, běží přímo na GitHubu)
+piper-tts==1.8.0
+lameenc==1.9.0

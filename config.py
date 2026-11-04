@@ -112,16 +112,44 @@ MODEL = "claude-sonnet-5"
 
 # ============================================================
 # PODCAST – audio verze briefingu (podcast.py)
-# Klíč hlasové služby patří do GitHub secrets (nebo do .env):
-#   Azure:       AZURE_SPEECH_KEY
-#   ElevenLabs:  ELEVENLABS_API_KEY
-# Bez klíče se podcast tiše přeskočí, web jede dál.
+# Když cokoli selže, podcast se přeskočí a web jede dál.
 # ============================================================
 PODCAST_ZAPNUTY = True
 
-# Hlasová služba: "azure" (0,5 mil. znaků měsíčně zdarma – briefing
-# spotřebuje asi 110 tisíc) nebo "elevenlabs" (přirozenější, placené)
-PODCAST_HLAS_SLUZBA = "azure"
+# Hlas:
+#   "piper"      – open source, zdarma, běží přímo na GitHubu, bez účtu
+#   "azure"      – přirozenější; 0,5 mil. znaků měsíčně zdarma, ale účet
+#                  chce kartu; klíč do GitHub secrets jako AZURE_SPEECH_KEY
+#   "elevenlabs" – nejpřirozenější, placené; secret ELEVENLABS_API_KEY
+PODCAST_HLAS_SLUZBA = "piper"
+
+# Piper: "cs_CZ-jirka-medium" (mužský) nebo "cs_CZ-kasandra-medium" (ženský)
+PODCAST_PIPER_HLAS = "cs_CZ-jirka-medium"
+# Tempo řeči: 1.0 = výchozí, menší číslo = rychleji. Jirka mluví pomalu,
+# proto 0.85 (pod 0.8 už se začne zadrhávat); Kasandře dej 1.0.
+PODCAST_PIPER_RYCHLOST = 0.85
+
+# Výslovnost cizích slov pro Piper (čte všechno po česky).
+# Vlevo začátek slova v textu, vpravo jak ho vyslovit – "Trump" tak
+# pokryje i "Trumpa", "Trumpovi"… Klidně doplňuj.
+PODCAST_VYSLOVNOST = {
+    "briefing": "brífink",
+    "Briefing": "Brífink",
+    "Trump": "Tramp",
+    "Microsoft": "Majkrosoft",
+    "Googl": "Gúgl",
+    "Appl": "Epl",
+    "Nvidi": "Envidi",
+    "NVIDI": "Envidi",
+    "OpenAI": "Oupn ej áj",
+    "Anthropic": "Entropik",
+    "Bloomberg": "Blúmberk",
+    "Reuters": "Rojtrs",
+    "Wall Street": "Vól strít",
+    "Financial Times": "Fajnenšl tajms",
+    "Bank of England": "Benk of Ingland",
+    "futures": "fjůčrs",
+}
 
 # Azure: český hlas a region, ve kterém sis službu Speech založil
 PODCAST_AZURE_HLAS = "cs-CZ-AntoninNeural"    # ženský: cs-CZ-VlastaNeural
@@ -132,8 +160,8 @@ PODCAST_AZURE_RYCHLOST = "+0%"               # např. "+8%" = o něco rychleji
 PODCAST_ELEVENLABS_HLAS = ""
 PODCAST_ELEVENLABS_MODEL = "eleven_multilingual_v2"
 
-# Délka scénáře ve slovech (650–800 slov ≈ 5 minut)
-PODCAST_DELKA_SLOV = (650, 800)
+# Délka scénáře ve slovech (520–620 slov ≈ 5 minut s hlasem Piper)
+PODCAST_DELKA_SLOV = (520, 620)
 
 # Kolik posledních epizod nechat ve feedu a na webu
 PODCAST_POCET_EPIZOD = 30
