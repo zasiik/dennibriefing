@@ -488,7 +488,7 @@ CSS = """
   .podcast {
     display: flex; align-items: center; gap: 18px;
     background: var(--karta); border: 1px solid var(--okraj);
-    border-radius: 16px; padding: 18px 24px; margin: 0 0 22px;
+    border-radius: 16px; padding: 18px 24px; margin: 0 0 34px;
     transition: background-color .45s ease, border-color .45s ease;
   }
   .pod-play {
@@ -1313,7 +1313,7 @@ def vytvor_html(data, zaklad="", navigace=None):
         print(f"  Přehrávač podcastu se nepovedl ({chyba}).")
         sekce_podcast = ""
 
-    obsah = f"""{sekce_podcast}{sekce_aktualit}{sekce_ft}
+    obsah = f"""{sekce_aktualit}{sekce_podcast}{sekce_ft}
   <nav class="filtry">
 {chr(10).join("    " + t for t in tlacitka)}
   </nav>
