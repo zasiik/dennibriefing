@@ -299,11 +299,11 @@ def _rozparsuj_scenar(text):
 
 def napis_scenar(data, vydano):
     import anthropic
-    from preloz_zpravy import _surove_volani, _SPOTREBA
+    from preloz_zpravy import _surove_volani, _SPOTREBA, cena_usd
 
     pred = dict(_SPOTREBA)
     client = anthropic.Anthropic()
-    text = _surove_volani(client, _prompt_scenare(data, vydano), 16000)
+    text = _surove_volani(client, _prompt_scenare(data, vydano), 16000, "podcast")
     scenar = _rozparsuj_scenar(text)
     slov = sum(len(o.split()) for o in scenar["odstavce"])
     if slov < 200:
@@ -311,7 +311,7 @@ def napis_scenar(data, vydano):
     vstup = _SPOTREBA["vstup"] - pred["vstup"]
     vystup = _SPOTREBA["vystup"] - pred["vystup"]
     print(f"  Scénář: {slov} slov, {len(scenar['odstavce'])} odstavců "
-          f"(≈ ${vstup / 1e6 * 3 + vystup / 1e6 * 15:.2f})")
+          f"(≈ ${cena_usd(vstup, vystup):.2f})")
     return scenar
 
 
