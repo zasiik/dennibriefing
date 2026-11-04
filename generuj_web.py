@@ -19,8 +19,15 @@ import os
 import sys
 from datetime import datetime
 
+import re
+
+import config
 from preloz_zpravy import vyber_a_preloz, uloz_data
 from stahni_zpravy import stahni_vsechny_zpravy
+
+# Kód GoatCounteru z config.py (jen písmena, číslice a pomlčky)
+GOATCOUNTER_KOD = re.sub(r"[^a-z0-9-]", "",
+                         str(getattr(config, "GOATCOUNTER_KOD", "")).lower())
 
 # Barvy štítků jednotlivých témat (klidně změň)
 BARVY_TEMAT = {
@@ -477,6 +484,66 @@ CSS = """
   .zdroj-dat a { color: var(--seda); text-decoration: none; }
   .zdroj-dat a:hover { text-decoration: underline; }
 
+  /* ---------- Podcast: přehrávač dnešní epizody ---------- */
+  .podcast {
+    display: flex; align-items: center; gap: 18px;
+    background: var(--karta); border: 1px solid var(--okraj);
+    border-radius: 16px; padding: 18px 24px; margin: 0 0 22px;
+    transition: background-color .45s ease, border-color .45s ease;
+  }
+  .pod-play {
+    flex-shrink: 0; width: 52px; height: 52px; border-radius: 50%;
+    border: 0; background: var(--text); color: var(--pozadi);
+    display: grid; place-items: center; cursor: pointer;
+    transition: transform .15s ease, background-color .45s ease, color .45s ease;
+  }
+  .pod-play:hover { transform: scale(1.06); }
+  .pod-play:active { transform: scale(.94); }
+  .pod-play svg { width: 22px; height: 22px; fill: currentColor; }
+  .pod-play .ikona-pauza, .podcast.hraje .ikona-play { display: none; }
+  .podcast.hraje .ikona-pauza { display: block; }
+  .pod-telo { flex: 1; min-width: 0; }
+  .pod-titul {
+    font-family: Georgia, "Times New Roman", serif; font-weight: 700;
+    font-size: 1.08rem; display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pod-delka {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.72rem; font-weight: 700; color: var(--seda);
+    border: 1px solid var(--okraj); border-radius: 999px; padding: 1px 9px;
+  }
+  .pod-lista { position: relative; height: 18px; margin: 6px 0 4px; cursor: pointer; outline: none; }
+  .pod-lista::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 6px;
+    border-radius: 999px; background: var(--linka); transition: background-color .45s ease;
+  }
+  .pod-postup {
+    position: absolute; left: 0; top: 6px; height: 6px; width: 0;
+    border-radius: 999px; background: #b0413e;
+  }
+  .pod-lista:focus-visible::before { box-shadow: 0 0 0 2px var(--seda); }
+  .pod-spodek {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font-size: 0.78rem; color: var(--seda);
+  }
+  .pod-cas { font-variant-numeric: tabular-nums; }
+  .pod-rychlost {
+    border: 1px solid var(--okraj); background: transparent; color: var(--seda);
+    border-radius: 8px; padding: 1px 8px; font-size: 0.75rem; font-weight: 700;
+    cursor: pointer; font-variant-numeric: tabular-nums;
+    transition: color .2s ease, border-color .2s ease;
+  }
+  .pod-rychlost:hover { color: var(--text); border-color: var(--seda); }
+  .pod-odber { margin-left: auto; }
+  .pod-odber a { color: var(--seda); font-weight: 600; text-decoration: none; }
+  .pod-odber a:hover { color: var(--text); text-decoration: underline; }
+  @media (max-width: 560px) {
+    .podcast { padding: 16px 18px; gap: 14px; align-items: flex-start; }
+    .pod-play { width: 46px; height: 46px; margin-top: 2px; }
+    .pod-odber { margin-left: 0; width: 100%; }
+  }
+
   /* ---------- Jazykové verze ---------- */
   .l-en { display: none; }
   body.anglicky .l-en { display: inline; }
@@ -493,6 +560,149 @@ CSS = """
 # Společný JavaScript (vše ošetřeno, ať funguje na obou stránkách)
 # ------------------------------------------------------------
 JS = """
+  // ---- Měření návštěvnosti (GoatCounter): událost = co kdo rozklikl ----
+  function gcUdalost(cesta, titulek) {
+    if (!document.querySelector("script[data-goatcounter]")) return;
+    var pokusu = 0;
+    (function zkus() {   // skript GoatCounteru se načítá asynchronně
+      if (window.goatcounter && window.goatcounter.count) {
+        try {
+          window.goatcounter.count({ path: String(cesta).slice(0, 400),
+            title: String(titulek || cesta).slice(0, 300), event: true });
+        } catch (e) {}
+      } else if (pokusu++ < 40) setTimeout(zkus, 150);
+    })();
+  }
+  (function () {
+    function cesky(el) {
+      if (!el) return "";
+      var s = el.querySelector(".l-cs");
+      return (s ? s.textContent : el.textContent).trim();
+    }
+    document.addEventListener("click", function (e) {
+      var el = e.target.closest ? e.target.closest("a, button, summary") : null;
+      if (!el) return;
+      if (el.matches(".karta h2 a")) {
+        var karta = el.closest(".karta");
+        var zdroj = karta.querySelector(".zdroj");
+        gcUdalost("klik/" + karta.dataset.tema + ": " + cesky(el),
+                  zdroj ? zdroj.textContent : "");
+      } else if (el.matches(".aktuality .zdroj-chip")) {
+        gcUdalost("klik/aktualita: " + cesky(el.closest(".akt").querySelector("h3")),
+                  el.textContent.trim());
+      } else if (el.matches(".ft-panel a")) {
+        gcUdalost("klik/FT News Briefing", "");
+      } else if (el.matches("details.kauza summary")) {
+        if (!el.parentNode.open)
+          gcUdalost("kauza: " + cesky(el.closest(".akt").querySelector("h3")), "");
+      } else if (el.matches(".pod-odber a")) {
+        gcUdalost("podcast/odběr: " + el.textContent.trim(), "");
+      } else if (el.matches(".hledani-radek")) {
+        var pole = document.getElementById("hledani-pole");
+        gcUdalost("hledání: " + (pole ? pole.value.trim().toLowerCase() : ""),
+                  el.textContent);
+      } else if (el.matches(".akt-tab")) {
+        gcUdalost("ui/aktuality: " + cesky(el), "");
+      } else if (el.matches(".filtr")) {
+        gcUdalost("ui/rubrika: " + cesky(el), "");
+      } else if (el.id === "jazyk") {
+        gcUdalost("ui/jazyk: " + (document.body.classList.contains("anglicky")
+                                  ? "čeština" : "angličtina"), "");
+      } else if (el.id === "rezim") {
+        gcUdalost("ui/tmavý režim", "");
+      } else if (el.id === "hledat-btn") {
+        gcUdalost("ui/hledání", "");
+      }
+    }, true);
+  })();
+
+  // ---- Podcast: přehrávač dnešní epizody ----
+  (function () {
+    var p = document.querySelector(".podcast");
+    if (!p) return;
+    var audio = p.querySelector("audio");
+    var btn = p.querySelector(".pod-play");
+    var lista = p.querySelector(".pod-lista");
+    var postup = p.querySelector(".pod-postup");
+    var cas = p.querySelector(".pod-cas");
+    var btnRychlost = p.querySelector(".pod-rychlost");
+    var celkem = +p.dataset.delka || 0;
+    var RYCHLOSTI = [1, 1.25, 1.5, 1.75];
+    var rychlost = 1, cekaPosun = null, spusteno = false;
+    try { rychlost = +localStorage.getItem("podcastRychlost") || 1; } catch (e) {}
+    if (RYCHLOSTI.indexOf(rychlost) === -1) rychlost = 1;
+
+    function fmt(s) {
+      s = Math.max(0, Math.floor(s || 0));
+      return Math.floor(s / 60) + ":" + ("0" + s % 60).slice(-2);
+    }
+    function delka() {
+      return isFinite(audio.duration) && audio.duration > 0 ? audio.duration : celkem;
+    }
+    function obnov() {
+      var d = delka();
+      cas.textContent = fmt(audio.currentTime) + " / " + fmt(d);
+      postup.style.width = d ? Math.min(100, audio.currentTime / d * 100) + "%" : "0";
+    }
+    function hraj() {
+      var slib = audio.play();
+      if (slib && slib.catch) slib.catch(function () {});
+    }
+    function posunNa(cil) {
+      cil = Math.max(0, Math.min(delka(), cil));
+      if (audio.readyState < 1) { cekaPosun = cil; hraj(); }
+      else audio.currentTime = cil;
+      obnov();
+    }
+    function ukazRychlost() {
+      btnRychlost.textContent = String(rychlost).replace(".", ",") + "×";
+      audio.playbackRate = rychlost;
+    }
+
+    btn.addEventListener("click", function () {
+      if (audio.paused) hraj(); else audio.pause();
+    });
+    audio.addEventListener("play", function () {
+      p.classList.add("hraje");
+      audio.playbackRate = rychlost;
+      if (spusteno) return;
+      spusteno = true;
+      gcUdalost("podcast/přehrání", p.dataset.titulek);
+      if ("mediaSession" in navigator && window.MediaMetadata) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: p.dataset.titulek, artist: "Denní briefing",
+          artwork: [{ src: p.dataset.obal, sizes: "3000x3000", type: "image/jpeg" }]
+        });
+      }
+    });
+    audio.addEventListener("pause", function () { p.classList.remove("hraje"); });
+    audio.addEventListener("ended", function () {
+      p.classList.remove("hraje");
+      gcUdalost("podcast/dohráno", p.dataset.titulek);
+    });
+    audio.addEventListener("timeupdate", obnov);
+    audio.addEventListener("loadedmetadata", function () {
+      if (cekaPosun !== null) { audio.currentTime = cekaPosun; cekaPosun = null; }
+      audio.playbackRate = rychlost;
+      obnov();
+    });
+    lista.tabIndex = 0;
+    lista.addEventListener("click", function (e) {
+      var r = lista.getBoundingClientRect();
+      posunNa((e.clientX - r.left) / r.width * delka());
+    });
+    lista.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { posunNa(audio.currentTime + 10); e.preventDefault(); }
+      if (e.key === "ArrowLeft") { posunNa(audio.currentTime - 10); e.preventDefault(); }
+    });
+    btnRychlost.addEventListener("click", function () {
+      rychlost = RYCHLOSTI[(RYCHLOSTI.indexOf(rychlost) + 1) % RYCHLOSTI.length];
+      try { localStorage.setItem("podcastRychlost", rychlost); } catch (e) {}
+      ukazRychlost();
+    });
+    ukazRychlost();
+  })();
+
   // ---- Filtrování rubrik podle tématu (jen stránka Zprávy) ----
   document.querySelectorAll(".filtr").forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -895,6 +1105,19 @@ def _kostra(data, aktivni_stranka, obsah, zaklad="", navigace=None):
     radek_navigace = (f'\n    <div class="vydani-nav">{" · ".join(sipky)}</div>'
                       if sipky else "")
 
+    # Podcastový feed (aby ho našly čtečky a podcastové aplikace)
+    odkaz_feedu = ""
+    if os.path.exists("podcast.xml"):
+        odkaz_feedu = ('\n<link rel="alternate" type="application/rss+xml" '
+                       'title="Denní briefing – podcast" '
+                       'href="https://dennibriefing.cz/podcast.xml">')
+    # Měření návštěvnosti (GoatCounter) – jen když je v config.py kód
+    goatcounter = ""
+    if GOATCOUNTER_KOD:
+        goatcounter = (f'\n<script data-goatcounter="https://{GOATCOUNTER_KOD}'
+                       '.goatcounter.com/count" async '
+                       'src="//gc.zgo.at/count.js"></script>')
+
     return f"""<!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -912,7 +1135,7 @@ def _kostra(data, aktivni_stranka, obsah, zaklad="", navigace=None):
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="cs_CZ">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/svg+xml" href="{zaklad}favicon.svg">
+<link rel="icon" type="image/svg+xml" href="{zaklad}favicon.svg">{odkaz_feedu}
 <style>{CSS}</style>
 </head>
 <body>
@@ -941,7 +1164,7 @@ def _kostra(data, aktivni_stranka, obsah, zaklad="", navigace=None):
   </nav>
 {obsah}
 </div>
-<script>var ZAKLAD = "{zaklad}";{JS}</script>
+<script>var ZAKLAD = "{zaklad}";{JS}</script>{goatcounter}
 </body>
 </html>
 """
@@ -1082,7 +1305,15 @@ def vytvor_html(data, zaklad="", navigace=None):
     </div>
   </section>"""
 
-    obsah = f"""{sekce_aktualit}{sekce_ft}
+    # ---- Přehrávač podcastu (jen když k vydání existuje epizoda) ----
+    try:
+        from podcast import html_prehravace
+        sekce_podcast = html_prehravace(data, zaklad)
+    except Exception as chyba:
+        print(f"  Přehrávač podcastu se nepovedl ({chyba}).")
+        sekce_podcast = ""
+
+    obsah = f"""{sekce_podcast}{sekce_aktualit}{sekce_ft}
   <nav class="filtry">
 {chr(10).join("    " + t for t in tlacitka)}
   </nav>
@@ -1196,6 +1427,16 @@ def vytvor_data_html(data):
 def uloz_html(data):
     import glob as glob_mod
 
+    # Podcastový feed (a případná obnova epizod z živého webu) – dřív než
+    # stránky, aby přehrávač věděl, které epizody existují
+    try:
+        from podcast import uloz_feed
+        pocet = uloz_feed()
+        if pocet:
+            print(f"Podcast: feed podcast.xml ({pocet} epizod).")
+    except Exception as chyba:
+        print(f"  Podcastový feed se nepovedl ({chyba}).")
+
     # Platná archivní vydání (nejnovější = právě vydané)
     archivni = []
     for soubor in sorted(glob_mod.glob("archiv/*.json")):
@@ -1281,6 +1522,13 @@ if __name__ == "__main__":
         print(f"\nCelkem staženo: {len(zpravy)} zpráv")
         vysledek = vyber_a_preloz(zpravy)
         uloz_data(vysledek)
+
+        # Audio verze briefingu (bez klíče hlasové služby se přeskočí)
+        try:
+            from podcast import vytvor_epizodu
+            vytvor_epizodu()
+        except Exception as chyba:
+            print(f"  Podcast se nepovedl ({chyba}).")
 
     # Stránky se vždy staví z data.json
     with open("data.json", encoding="utf-8") as f:

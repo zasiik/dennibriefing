@@ -59,6 +59,16 @@ jobs:
           restore-keys: |
             archiv-
 
+      # Uchová epizody podcastu (MP3) mezi dny. Kdyby cache vypršela,
+      # podcast.py si dosavadní epizody stáhne zpět z živého webu.
+      - name: Obnovit epizody podcastu
+        uses: actions/cache@v4
+        with:
+          path: podcast
+          key: podcast-${{ github.run_id }}
+          restore-keys: |
+            podcast-
+
       # Uchová poslední vygenerovaná data — po pushi se z nich web
       # přestaví zadarmo, bez volání Claude API
       - name: Obnovit poslední data
@@ -77,6 +87,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ARAD_API_KEY: ${{ secrets.ARAD_API_KEY }}
+          # Hlas pro podcast – stačí jeden z nich (viz config.py)
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: python3 generuj_web.py
 
       # Po nahrání změn: jen přestavět stránky z posledních dat — ZDARMA.
@@ -93,8 +106,10 @@ jobs:
       - name: Připravit složku k publikování
         run: |
           mkdir -p public
-          cp index.html data.html data.json favicon.svg og.png hledani.json public/
+          cp index.html data.html data.json favicon.svg og.png hledani.json podcast-obal.jpg public/
           if [ -d trhy_data ]; then cp -r trhy_data public/; fi
+          if [ -f podcast.xml ]; then cp podcast.xml public/; fi
+          if [ -d podcast ]; then cp -r podcast public/; fi
           if ls archiv/*.html >/dev/null 2>&1; then
             mkdir -p public/archiv && cp archiv/*.html public/archiv/
           fi
