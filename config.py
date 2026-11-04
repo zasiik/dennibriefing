@@ -110,6 +110,52 @@ MAX_STARI_HODIN = 36
 # Který model Claude použít
 MODEL = "claude-sonnet-5"
 
+# ============================================================
+# PODCAST – audio verze briefingu (podcast.py)
+# Klíč hlasové služby patří do GitHub secrets (nebo do .env):
+#   Azure:       AZURE_SPEECH_KEY
+#   ElevenLabs:  ELEVENLABS_API_KEY
+# Bez klíče se podcast tiše přeskočí, web jede dál.
+# ============================================================
+PODCAST_ZAPNUTY = True
+
+# Hlasová služba: "azure" (0,5 mil. znaků měsíčně zdarma – briefing
+# spotřebuje asi 110 tisíc) nebo "elevenlabs" (přirozenější, placené)
+PODCAST_HLAS_SLUZBA = "azure"
+
+# Azure: český hlas a region, ve kterém sis službu Speech založil
+PODCAST_AZURE_HLAS = "cs-CZ-AntoninNeural"    # ženský: cs-CZ-VlastaNeural
+PODCAST_AZURE_REGION = "westeurope"
+PODCAST_AZURE_RYCHLOST = "+0%"               # např. "+8%" = o něco rychleji
+
+# ElevenLabs: ID hlasu z Voice Library (Voices → ⋯ → Copy voice ID)
+PODCAST_ELEVENLABS_HLAS = ""
+PODCAST_ELEVENLABS_MODEL = "eleven_multilingual_v2"
+
+# Délka scénáře ve slovech (650–800 slov ≈ 5 minut)
+PODCAST_DELKA_SLOV = (650, 800)
+
+# Kolik posledních epizod nechat ve feedu a na webu
+PODCAST_POCET_EPIZOD = 30
+
+# Údaje pořadu pro Apple Podcasts / Spotify
+PODCAST_NAZEV = "Denní briefing"
+PODCAST_AUTOR = "Denní briefing"
+PODCAST_POPIS = ""   # prázdné = výchozí popis
+# E-mail vlastníka – Spotify na něj pošle ověřovací kód. Ve feedu je
+# veřejně vidět, klidně použij samostatnou adresu.
+PODCAST_EMAIL = ""
+# Až bude podcast schválený, vlož sem odkazy – objeví se u přehrávače
+PODCAST_ODKAZ_APPLE = ""
+PODCAST_ODKAZ_SPOTIFY = ""
+
+# ============================================================
+# MĚŘENÍ NÁVŠTĚVNOSTI – GoatCounter (zdarma, bez cookies)
+# Kód z adresy tvého účtu: https://KOD.goatcounter.com
+# Prázdné = měření vypnuté.
+# ============================================================
+GOATCOUNTER_KOD = "dennibriefing"
+
 # Klíčová čísla — seznam se čte ze souboru tickery.txt (snadná úprava).
 # Formát řádku: Název | symbol Yahoo | symbol stooq (nepovinný)
 def _nacti_tickery():

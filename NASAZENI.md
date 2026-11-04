@@ -133,3 +133,84 @@ nikdo ho neuvidí.
 > Poznámka: naplánované spouštění GitHub uspí, pokud je repozitář 60 dní bez
 > jakékoli aktivity. Když web běží dál, nevadí; kdyby se zastavil, stačí jednou
 > ručně spustit workflow.
+
+---
+
+# Podcast – audio verze briefingu
+
+Každé ráno po vygenerování webu napíše Claude z aktualit ~5minutový mluvený
+text, hlasová služba ho namluví do MP3 a na webu se objeví přehrávač.
+Zároveň vznikne podcastový feed **https://dennibriefing.cz/podcast.xml**,
+který jde přidat do Apple Podcasts i Spotify. Kód je v `podcast.py`,
+nastavení v `config.py` (sekce PODCAST).
+
+Dokud nevložíš klíč hlasové služby, podcast se tiše přeskakuje a web
+běží jako dřív.
+
+## Krok 1 – Hlas přes Azure (zdarma)
+
+Azure dává 0,5 milionu znaků měsíčně zdarma; briefing spotřebuje asi
+110 tisíc. Registrace chce platební kartu, ale tarif **Free F0** nic nestojí.
+
+1. Na **portal.azure.com** si založ účet a přihlas se.
+2. **Create a resource** → vyhledej **Speech** (Azure AI Speech) → **Create**.
+3. **Region:** West Europe · **Pricing tier:** Free F0 · název libovolný → **Create**.
+4. V hotovém prostředku otevři **Keys and Endpoint** a zkopíruj **KEY 1**.
+5. Na GitHubu: **Settings → Secrets and variables → Actions → New repository secret**
+   - **Name:** `AZURE_SPEECH_KEY` · **Secret:** zkopírovaný klíč.
+6. Pokud jsi zvolil jiný region než West Europe, přepiš v `config.py`
+   řádek `PODCAST_AZURE_REGION` (např. `"germanywestcentral"`).
+7. **Actions → Build a nasazení webu → Run workflow.** V logu hledej
+   „Epizoda hotová". Na webu se nad aktualitami objeví přehrávač.
+
+Hlas změníš v `config.py`: `cs-CZ-AntoninNeural` (mužský) nebo
+`cs-CZ-VlastaNeural` (ženský). Rychlost řeči: `PODCAST_AZURE_RYCHLOST`.
+
+> Přirozenější (placený) hlas: založ účet na elevenlabs.io, vyber hlas
+> a zkopíruj jeho Voice ID. V `config.py` nastav `PODCAST_HLAS_SLUZBA = "elevenlabs"`
+> a `PODCAST_ELEVENLABS_HLAS`, na GitHub přidej secret `ELEVENLABS_API_KEY`.
+
+## Krok 2 – Apple Podcasts a Spotify (až vyjde první epizoda)
+
+1. V `config.py` vyplň `PODCAST_EMAIL` (je ve feedu veřejně vidět –
+   klidně samostatná adresa). Spotify na ni pošle ověřovací kód.
+2. **Spotify:** creators.spotify.com → přidat existující podcast přes RSS →
+   vlož `https://dennibriefing.cz/podcast.xml` → ověř kódem z e-mailu.
+3. **Apple:** podcastsconnect.apple.com → **+ → New Show** → přidat přes RSS
+   feed → vlož stejnou adresu. Schválení obvykle trvá pár dní.
+4. Po schválení vlož odkazy na pořad do `PODCAST_ODKAZ_APPLE`
+   a `PODCAST_ODKAZ_SPOTIFY` – objeví se u přehrávače vedle RSS.
+
+Uchovává se posledních 30 epizod (`PODCAST_POCET_EPIZOD`). Přepis každé
+epizody leží vedle MP3 jako `.txt`.
+
+---
+
+# Návštěvnost – GoatCounter
+
+Měření bez cookies (žádná cookie lišta není potřeba), zdarma pro osobní
+weby. Skript se do stránek vkládá sám, když je v `config.py` vyplněný
+`GOATCOUNTER_KOD` (nastaveno na `dennibriefing`).
+
+1. Na **goatcounter.com** klikni **Sign up** a jako **Code** zadej
+   `dennibriefing` (musí se shodovat s `GOATCOUNTER_KOD`; když je obsazený,
+   zvol jiný a přepiš ho v `config.py`).
+2. Statistiky pak najdeš na **https://dennibriefing.goatcounter.com**.
+3. Ať se nepočítají tvoje vlastní návštěvy: na každém svém zařízení
+   jednou otevři **https://dennibriefing.cz/#toggle-goatcounter**.
+
+Kromě návštěv stránek se zaznamenává, co lidé rozklikávají (v přehledu
+jsou to položky označené jako události):
+
+| Událost | Co znamená |
+|---|---|
+| `klik/<rubrika>: titulek` | otevřel zprávu z rubriky (akcie, AI…) |
+| `klik/aktualita: titulek` | otevřel zdroj u aktuality |
+| `kauza: titulek` | rozbalil shrnutí kauzy |
+| `podcast/přehrání`, `podcast/dohráno` | pustil / dohrál epizodu na webu |
+| `podcast/odběr: …` | klikl na Apple Podcasts / Spotify / RSS |
+| `hledání: dotaz` | co hledal (zapíše se po kliknutí na výsledek) |
+| `ui/…` | přepnul jazyk, tmavý režim, záložku Svět/Česko, rubriku |
+
+Poslechy v aplikacích (Apple Podcasts, Spotify) GoatCounter nevidí –
+ty ukazují jejich vlastní statistiky pro autory.

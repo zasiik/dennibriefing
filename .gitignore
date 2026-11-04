@@ -14,3 +14,8 @@ data.json
 hledani.json
 archiv/
 trhy_data/
+
+# Podcast (generuje se při každém běhu)
+podcast/
+podcast.xml
+ukazka.mp3
