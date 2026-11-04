@@ -2,12 +2,13 @@
 # PODCAST – audio verze denního briefingu.
 #
 #   1. Claude napíše z dnešních aktualit ~5minutový mluvený text
-#   2. Hlas z něj udělá MP3 – výchozí je Piper (open source, zdarma,
-#      běží přímo na GitHubu); volitelně Azure nebo ElevenLabs
+#   2. Hlas z něj udělá MP3 – výchozí je Pocket TTS s českým modelem
+#      a hlasem Kasandry (open source, zdarma, běží přímo na GitHubu);
+#      záloha Piper, volitelně placené Azure nebo ElevenLabs
 #   3. Epizoda se uloží do složky podcast/ a přidá do podcast.xml
 #      (RSS feed, který jde přidat do Apple Podcasts i Spotify)
 #
-# Nastavení je v config.py (sekce PODCAST). Piper žádný klíč nepotřebuje;
+# Nastavení je v config.py (sekce PODCAST). Pocket ani Piper klíč nepotřebují;
 # Azure / ElevenLabs čtou klíč z .env nebo GitHub secrets
 # (AZURE_SPEECH_KEY / ELEVENLABS_API_KEY). Když cokoli selže, web se
 # vytvoří normálně, jen bez nové epizody.
@@ -45,16 +46,20 @@ def _nastaveni(nazev, vychozi):
 
 
 ZAPNUTO = _nastaveni("PODCAST_ZAPNUTY", True)
-SLUZBA = _nastaveni("PODCAST_HLAS_SLUZBA", "piper").strip().lower()
-PIPER_HLAS = _nastaveni("PODCAST_PIPER_HLAS", "cs_CZ-jirka-medium").strip()
-PIPER_RYCHLOST = float(_nastaveni("PODCAST_PIPER_RYCHLOST", 0.85))
+SLUZBA = _nastaveni("PODCAST_HLAS_SLUZBA", "pocket").strip().lower()
+POCKET_MODEL = _nastaveni(
+    "PODCAST_POCKET_MODEL",
+    "hf://vvolhejn/pocket-tts-czech/czech.yaml@7c1fbd0acba765617749dd17f3dbddc2be791cc7")
+POCKET_VZOR = _nastaveni("PODCAST_POCKET_VZOR", "podcast-hlas-vzor.wav")
+PIPER_HLAS = _nastaveni("PODCAST_PIPER_HLAS", "cs_CZ-kasandra-medium").strip()
+PIPER_RYCHLOST = float(_nastaveni("PODCAST_PIPER_RYCHLOST", 1.0))
 VYSLOVNOST = _nastaveni("PODCAST_VYSLOVNOST", {})
 AZURE_HLAS = _nastaveni("PODCAST_AZURE_HLAS", "cs-CZ-AntoninNeural")
 AZURE_REGION = _nastaveni("PODCAST_AZURE_REGION", "westeurope")
 AZURE_RYCHLOST = _nastaveni("PODCAST_AZURE_RYCHLOST", "+0%")
 ELEVEN_HLAS = _nastaveni("PODCAST_ELEVENLABS_HLAS", "")
 ELEVEN_MODEL = _nastaveni("PODCAST_ELEVENLABS_MODEL", "eleven_multilingual_v2")
-DELKA_SLOV = _nastaveni("PODCAST_DELKA_SLOV", (520, 620))
+DELKA_SLOV = _nastaveni("PODCAST_DELKA_SLOV", (600, 700))
 POCET_EPIZOD = _nastaveni("PODCAST_POCET_EPIZOD", 30)
 NAZEV = _nastaveni("PODCAST_NAZEV", "Denní briefing")
 POPIS = _nastaveni("PODCAST_POPIS", "")
@@ -73,15 +78,17 @@ _PLATNY_SOUBOR = re.compile(r"^podcast/\d{4}-\d{2}-\d{2}\.(mp3|txt)$")
 # Formáty zvuku: (formát pro službu, datový tok v bitech/s pro výpočet délky)
 _AZURE_FORMAT = ("audio-24khz-48kbitrate-mono-mp3", 48000)
 _ELEVEN_FORMAT = ("mp3_44100_64", 64000)
-_PIPER_KBPS = 48
+_MP3_KBPS = 64
 
 # Hlasy Piper: odkud se stahují a jak je správně uvést (licence)
 HLASY_SLOZKA = "hlasy"
 _PIPER_ZDROJ = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-_PIPER_AUTORI = {
+_KASANDRA = "Hlas Kasandra © Ondřej Šimek, licence CC BY 4.0"
+_AUTORI_HLASU = {
     "cs_CZ-jirka-medium": "Hlas Jirka (Piper, licence CC0).",
-    "cs_CZ-kasandra-medium": ("Hlas Kasandra © Ondřej Šimek, licence CC BY 4.0 "
-                              "(Piper)."),
+    "cs_CZ-kasandra-medium": f"{_KASANDRA} (Piper).",
+    "pocket": (f"{_KASANDRA}, namluveno modelem Pocket TTS Czech "
+               "(vvolhejn, licence CC BY 4.0, trénován na korpusu ParCzech)."),
 }
 
 DNY = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
@@ -319,9 +326,9 @@ def _klic():
 
 def _chybi_pro_hlas():
     """Co chybí, aby šlo namluvit (prázdný text = vše připraveno)."""
-    if SLUZBA == "piper":
+    if SLUZBA in ("pocket", "piper"):
         try:
-            import piper, lameenc   # noqa: F401
+            import piper, lameenc   # noqa: F401  (Piper je i záloha Pocketu)
         except ImportError:
             return "chybí balíčky piper-tts a lameenc (requirements.txt)"
         return ""
@@ -332,11 +339,64 @@ def _chybi_pro_hlas():
 
 
 def _vyslovnost(text):
-    """Cizí slova přepíše tak, jak se mají vyslovit (jen pro Piper).
-    Klíč se hledá na začátku slova, takže 'Trump' pokryje i 'Trumpa'."""
+    """Text připraví pro open-source hlasy, které čtou všechno po česky:
+    cizí slova přepíše podle slovníku (klíč se hledá na začátku slova,
+    takže 'Trump' pokryje i 'Trumpa') a zbylé číslice převede na slova."""
     for slovo, vyslovit in VYSLOVNOST.items():
         text = re.sub(r"(?<!\w)" + re.escape(slovo), vyslovit, text)
+    text = re.sub(r"(?<!\w)AI(?!\w)", "ej áj", text)
+    text = re.sub(r"\s*%", " procent", text)
+    # Data: "4. listopadu" → "čtvrtého listopadu"
+    text = re.sub(r"(?<!\d)(\d{1,2})\.\s+(" + "|".join(MESICE_2P[1:]) + r")\b",
+                  lambda s: (_den_slovy(date(2001, MESICE_2P.index(s.group(2)),
+                                             int(s.group(1))))
+                             if 1 <= int(s.group(1)) <= 31 else s.group(0)),
+                  text)
+    try:
+        from num2words import num2words
+
+        def cele(n):
+            slovo = {1: "jedna", 2: "dvě"}.get(n) or num2words(n, lang="cs")
+            return slovo + (" celá" if n == 1 else " celé" if 2 <= n <= 4
+                            else " celých")
+
+        def slovy(shoda):
+            cislo = shoda.group(0).replace(" ", "")
+            try:
+                if "," in cislo or "." in cislo:
+                    cela, desetinna = re.split(r"[.,]", cislo)
+                    return f"{cele(int(cela))} {num2words(int(desetinna), lang='cs')}"
+                return num2words(int(cislo), lang="cs")
+            except Exception:
+                return shoda.group(0)
+        text = re.sub(r"\d{1,3}(?: \d{3})+|\d+(?:[.,]\d+)?", slovy, text)
+    except ImportError:
+        pass
     return text
+
+
+def _vety(odstavec):
+    """Rozdělí odstavec na věty (model je spolehlivější po kratších kusech)."""
+    return [v.strip() for v in re.split(
+        r"(?<=[.!?…])\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ0-9„])", odstavec) if v.strip()]
+
+
+def _na_mp3(zvuk, vzorkovani):
+    """Float zvuk (-1…1) → vyrovnaná hlasitost → MP3. Vrací (bajty, tok)."""
+    import lameenc
+    import numpy as np
+
+    zvuk = np.asarray(zvuk, dtype=np.float32)
+    rms = float(np.sqrt(np.mean(zvuk ** 2))) or 1.0
+    zvuk = zvuk * (10 ** (-19 / 20) / rms)        # cíl ≈ -19 dBFS (podcast)
+    zvuk = np.tanh(zvuk / 0.89) * 0.89            # měkký omezovač špiček
+    pcm = (zvuk * 32767).astype(np.int16)
+    kodek = lameenc.Encoder()
+    kodek.set_bit_rate(_MP3_KBPS)
+    kodek.set_in_sample_rate(vzorkovani)
+    kodek.set_channels(1)
+    kodek.set_quality(2)
+    return bytes(kodek.encode(pcm.tobytes()) + kodek.flush()), _MP3_KBPS * 1000
 
 
 def _stahni_hlas_piper():
@@ -364,7 +424,6 @@ def _stahni_hlas_piper():
 
 
 def _namluv_piper(odstavce):
-    import lameenc
     import numpy as np
     from piper import PiperVoice, SynthesisConfig
 
@@ -373,22 +432,46 @@ def _namluv_piper(odstavce):
     nastaveni = SynthesisConfig(length_scale=PIPER_RYCHLOST)
 
     def ticho(sekund):
-        return np.zeros(int(vzorkovani * sekund), dtype=np.int16)
+        return np.zeros(int(vzorkovani * sekund), dtype=np.float32)
 
     kusy = [ticho(0.4)]
     for odstavec in odstavce:
         for veta in hlas.synthesize(_vyslovnost(odstavec), nastaveni):
-            kusy += [veta.audio_int16_array, ticho(0.28)]
+            kusy += [veta.audio_int16_array.astype(np.float32) / 32768, ticho(0.28)]
         kusy.append(ticho(0.6))            # delší pauza mezi zprávami
-    pcm = np.concatenate(kusy)
+    return _na_mp3(np.concatenate(kusy), vzorkovani)
 
-    kodek = lameenc.Encoder()
-    kodek.set_bit_rate(_PIPER_KBPS)
-    kodek.set_in_sample_rate(vzorkovani)
-    kodek.set_channels(1)
-    kodek.set_quality(2)
-    zvuk = bytes(kodek.encode(pcm.tobytes()) + kodek.flush())
-    return zvuk, _PIPER_KBPS * 1000
+
+def _namluv_pocket(odstavce):
+    """Pocket TTS (Kyutai) s českým modelem natrénovaným na ~1000 hodinách
+    řeči; barvu hlasu přebírá z krátké nahrávky (POCKET_VZOR = Kasandra)."""
+    import numpy as np
+    from pocket_tts import TTSModel
+
+    if not os.path.exists(POCKET_VZOR):
+        raise RuntimeError(f"chybí vzor hlasu {POCKET_VZOR}")
+    model = TTSModel.load_model(config=POCKET_MODEL)
+    stav = model.get_state_for_audio_prompt(POCKET_VZOR)
+    vzorkovani = model.sample_rate
+
+    def ticho(sekund):
+        return np.zeros(int(vzorkovani * sekund), dtype=np.float32)
+
+    kusy, opakovano = [ticho(0.4)], 0
+    for odstavec in odstavce:
+        for veta in _vety(_vyslovnost(odstavec)):
+            # Hlídač: když model větu zkrátí nebo „ujede", zkusí ji znovu
+            cekano = max(len(veta) / 15.0, 0.6)
+            for pokus in range(3):
+                audio = model.generate_audio(stav, veta).numpy()
+                if 0.55 <= len(audio) / vzorkovani / cekano <= 2.0:
+                    break
+                opakovano += 1
+            kusy += [audio, ticho(0.22)]
+        kusy.append(ticho(0.55))           # delší pauza mezi zprávami
+    if opakovano:
+        print(f"  Pocket: {opakovano}× věta vygenerována znovu (hlídač délky).")
+    return _na_mp3(np.concatenate(kusy), vzorkovani)
 
 
 def _useky(odstavce, max_znaku=2500):
@@ -474,8 +557,19 @@ def _namluv_elevenlabs(odstavce, klic):
     return zvuk, _ELEVEN_FORMAT[1]
 
 
+_POUZITY_HLAS = {"hlas": ""}   # kterým hlasem se nakonec namlouvalo
+
+
 def namluv(odstavce):
     """Vrátí (MP3 bajty, datový tok). Služba podle config.py."""
+    if SLUZBA == "pocket":
+        try:
+            _POUZITY_HLAS["hlas"] = "pocket"
+            return _namluv_pocket(odstavce)
+        except Exception as chyba:
+            print(f"  Pocket TTS selhal ({chyba}) – namlouvám zálohou Piper.")
+            _POUZITY_HLAS["hlas"] = PIPER_HLAS
+            return _namluv_piper(odstavce)
     if SLUZBA == "piper":
         return _namluv_piper(odstavce)
     klic = _klic()
@@ -499,7 +593,7 @@ def vytvor_epizodu(soubor_dat="data.json"):
         return False
     try:
         obnov_z_webu()
-        if SLUZBA == "piper":
+        if SLUZBA in ("pocket", "piper"):
             _stahni_hlas_piper()   # hlas připravit dřív, než se zaplatí scénář
         with open(soubor_dat, encoding="utf-8") as f:
             data = json.load(f)
@@ -512,7 +606,8 @@ def vytvor_epizodu(soubor_dat="data.json"):
         print("Podcast 1/2: píšu scénář…", flush=True)
         scenar = napis_scenar(data, vydano)
         znaku = sum(len(o) for o in scenar["odstavce"])
-        hlas = {"piper": PIPER_HLAS, "elevenlabs": ELEVEN_HLAS}.get(SLUZBA, AZURE_HLAS)
+        hlas = {"pocket": "pocket", "piper": PIPER_HLAS,
+                "elevenlabs": ELEVEN_HLAS}.get(SLUZBA, AZURE_HLAS)
         print(f"Podcast 2/2: namlouvám ({SLUZBA}, {hlas}, {znaku} znaků)…", flush=True)
         zvuk, tok = namluv(scenar["odstavce"])
         if len(zvuk) < 50_000:
@@ -535,7 +630,7 @@ def vytvor_epizodu(soubor_dat="data.json"):
             "prepis": prepis,
             "velikost": len(zvuk),
             "delka_s": round(len(zvuk) * 8 / tok),
-            "hlas": hlas,
+            "hlas": _POUZITY_HLAS["hlas"] or hlas,
         }
         epizody = [e for e in nacti_epizody() if e.get("datum") != iso]
         epizody.append(epizoda)
@@ -566,8 +661,8 @@ def _popis_epizody(ep):
     radky.append(f"Celý briefing s odkazy na zdroje najdete na {WEB}")
     radky.append("Text připravuje umělá inteligence ze zpravodajských "
                  "zdrojů, čte ho syntetický hlas.")
-    if ep.get("hlas") in _PIPER_AUTORI:
-        radky.append(_PIPER_AUTORI[ep["hlas"]])
+    if ep.get("hlas") in _AUTORI_HLASU:
+        radky.append(_AUTORI_HLASU[ep["hlas"]])
     return "\n\n".join(radky)
 
 

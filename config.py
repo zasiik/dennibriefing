@@ -117,19 +117,26 @@ MODEL = "claude-sonnet-5"
 PODCAST_ZAPNUTY = True
 
 # Hlas:
-#   "piper"      – open source, zdarma, běží přímo na GitHubu, bez účtu
-#   "azure"      – přirozenější; 0,5 mil. znaků měsíčně zdarma, ale účet
-#                  chce kartu; klíč do GitHub secrets jako AZURE_SPEECH_KEY
-#   "elevenlabs" – nejpřirozenější, placené; secret ELEVENLABS_API_KEY
-PODCAST_HLAS_SLUZBA = "piper"
+#   "pocket"     – výchozí: Pocket TTS s českým modelem (natrénován na ~1000
+#                  hodinách české řeči) mluví hlasem Kasandry. Open source,
+#                  zdarma, běží přímo na GitHubu (~3 min). Když selže,
+#                  automaticky naskočí Piper.
+#   "piper"      – starší, robotičtější open-source hlas (taky zdarma)
+#   "azure" / "elevenlabs" – placené; klíč do GitHub secrets
+#                  (AZURE_SPEECH_KEY / ELEVENLABS_API_KEY)
+PODCAST_HLAS_SLUZBA = "pocket"
 
-# Piper: "cs_CZ-jirka-medium" (mužský) nebo "cs_CZ-kasandra-medium" (ženský)
-PODCAST_PIPER_HLAS = "cs_CZ-jirka-medium"
-# Tempo řeči: 1.0 = výchozí, menší číslo = rychleji. Jirka mluví pomalu,
-# proto 0.85 (pod 0.8 už se začne zadrhávat); Kasandře dej 1.0.
-PODCAST_PIPER_RYCHLOST = 0.85
+# Pocket TTS: český model (připnutý na konkrétní verzi) a krátká nahrávka,
+# jejíž barvu hlasu model napodobí (Kasandra, CC BY 4.0)
+PODCAST_POCKET_MODEL = ("hf://vvolhejn/pocket-tts-czech/czech.yaml"
+                        "@7c1fbd0acba765617749dd17f3dbddc2be791cc7")
+PODCAST_POCKET_VZOR = "podcast-hlas-vzor.wav"
 
-# Výslovnost cizích slov pro Piper (čte všechno po česky).
+# Piper (záloha): hlas Kasandra a tempo řeči (menší číslo = rychleji)
+PODCAST_PIPER_HLAS = "cs_CZ-kasandra-medium"
+PODCAST_PIPER_RYCHLOST = 1.0
+
+# Výslovnost cizích slov (open-source hlasy čtou všechno po česky).
 # Vlevo začátek slova v textu, vpravo jak ho vyslovit – "Trump" tak
 # pokryje i "Trumpa", "Trumpovi"… Klidně doplňuj.
 PODCAST_VYSLOVNOST = {
@@ -149,6 +156,10 @@ PODCAST_VYSLOVNOST = {
     "Financial Times": "Fajnenšl tajms",
     "Bank of England": "Benk of Ingland",
     "futures": "fjůčrs",
+    "S&P 500": "es end pí pět set",
+    "S&P": "es end pí",
+    "Nasdaq": "Nezdek",
+    "JP Morgan": "Džej Pí Morgn",
 }
 
 # Azure: český hlas a region, ve kterém sis službu Speech založil
@@ -160,8 +171,8 @@ PODCAST_AZURE_RYCHLOST = "+0%"               # např. "+8%" = o něco rychleji
 PODCAST_ELEVENLABS_HLAS = ""
 PODCAST_ELEVENLABS_MODEL = "eleven_multilingual_v2"
 
-# Délka scénáře ve slovech (520–620 slov ≈ 5 minut s hlasem Piper)
-PODCAST_DELKA_SLOV = (520, 620)
+# Délka scénáře ve slovech (600–700 slov ≈ 5 minut poslechu)
+PODCAST_DELKA_SLOV = (600, 700)
 
 # Kolik posledních epizod nechat ve feedu a na webu
 PODCAST_POCET_EPIZOD = 30

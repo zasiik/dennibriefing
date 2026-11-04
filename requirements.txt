@@ -1,5 +1,9 @@
 anthropic
 feedparser
 # hlas pro podcast (open source, běží přímo na GitHubu)
+# PyTorch jen pro procesor – bez gigabajtů knihoven pro grafické karty
+--extra-index-url https://download.pytorch.org/whl/cpu
+pocket-tts==4.0.1
 piper-tts==1.8.0
 lameenc==1.9.0
+num2words==0.5.14
