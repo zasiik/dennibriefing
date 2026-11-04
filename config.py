@@ -110,6 +110,17 @@ MAX_STARI_HODIN = 36
 # Který model Claude použít
 MODEL = "claude-sonnet-5"
 
+# Kolik má Claude u jednotlivých úloh skrytě „přemýšlet". Přemýšlení se
+# platí jako výstup a dřív tvořilo zhruba 3/4 útraty za běh.
+#   "vypnuto"  – bez přemýšlení (nejlevnější; na překlad a kontrolu stačí)
+#   "low" / "medium" / "high" – úroveň úsilí ("high" = původní chování)
+PREMYSLENI = {
+    "karty": "vypnuto",       # výběr a překlad zpráv do rubrik
+    "aktuality": "medium",    # hlavní briefing, kauzy, kalendář – tady se vyplatí
+    "fakta": "vypnuto",       # kontrola faktů proti originálům
+    "podcast": "vypnuto",     # scénář podcastu z hotových aktualit
+}
+
 # ============================================================
 # PODCAST – audio verze briefingu (podcast.py)
 # Když cokoli selže, podcast se přeskočí a web jede dál.

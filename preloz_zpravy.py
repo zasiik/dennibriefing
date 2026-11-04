@@ -43,6 +43,39 @@ MAX_TOKENS_FAKTA = 16000
 # Počítadlo spotřeby tokenů za běh
 _SPOTREBA = {"vstup": 0, "vystup": 0}
 
+# Ceník (USD za milion tokenů: vstup, výstup) – kvůli výpisu útraty v logu
+_CENIK = {
+    "claude-sonnet-5": (2, 10), "claude-sonnet-5-5": (2, 10),
+    "claude-haiku-5-5": (0.10, 0.50), "claude-opus-5-5": (4, 20),
+    "claude-opus-5": (5, 25),
+}
+
+
+def cena_usd(vstup, vystup):
+    """Orientační cena v USD podle ceníku modelu z config.py."""
+    za_vstup, za_vystup = _CENIK.get(MODEL, (2, 10))
+    return vstup / 1e6 * za_vstup + vystup / 1e6 * za_vystup
+
+
+# Kolik má Claude u jednotlivých úloh „přemýšlet". Skryté přemýšlení se
+# platí jako výstup a dřív tvořilo zhruba tři čtvrtiny útraty.
+try:
+    from config import PREMYSLENI
+except ImportError:
+    PREMYSLENI = {}
+
+
+def _parametry_premysleni(uloha):
+    uroven = str(PREMYSLENI.get(uloha, "")).strip().lower()
+    if uroven == "vypnuto":
+        # Sonnet 5.5 místo "disabled" přijímá "between_tools"
+        if "sonnet-5-5" in MODEL:
+            return {"thinking": {"type": "between_tools"}}
+        return {"thinking": {"type": "disabled"}}
+    if uroven in ("low", "medium", "high"):
+        return {"output_config": {"effort": uroven}}
+    return {}
+
 # Překladová cache: co už Claude jednou přeložil, se znovu neposílá
 CACHE_SOUBOR = "preklady_cache.json"
 CACHE_DNU = 4  # jak dlouho držet staré překlady
@@ -149,16 +182,36 @@ def _vytahni_text(odpoved):
     return text
 
 
-def _surove_volani(client, prompt, max_tokens):
-    with client.messages.stream(
-        model=MODEL,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        odpoved = stream.get_final_message()
+def _surove_volani(client, prompt, max_tokens, uloha=""):
+    parametry = _parametry_premysleni(uloha)
+
+    def posli(parametry):
+        with client.messages.stream(
+            model=MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            **parametry,
+        ) as stream:
+            return stream.get_final_message()
+
+    try:
+        odpoved = posli(parametry)
+    except anthropic.BadRequestError as chyba:
+        if not parametry:
+            raise
+        # Model nastavení přemýšlení nepřijal (např. jiný model v config.py)
+        # – zkusí se to s nízkým úsilím, ať běh nespadne
+        print(f"  ({uloha}: nastavení přemýšlení odmítnuto – {chyba}; "
+              f"zkouším s nízkým úsilím)")
+        odpoved = posli({"output_config": {"effort": "low"}})
     try:
         _SPOTREBA["vstup"] += odpoved.usage.input_tokens
         _SPOTREBA["vystup"] += odpoved.usage.output_tokens
+        if uloha:
+            print(f"  ({uloha}: {odpoved.usage.input_tokens:,} vstup + "
+                  f"{odpoved.usage.output_tokens:,} výstup ≈ "
+                  f"${cena_usd(odpoved.usage.input_tokens, odpoved.usage.output_tokens):.2f})"
+                  .replace(",", " "))
     except Exception:
         pass
     if odpoved.stop_reason == "max_tokens":
@@ -170,7 +223,7 @@ def _surove_volani(client, prompt, max_tokens):
     return _vytahni_text(odpoved)
 
 
-def _zavolej_clauda(client, prompt, max_tokens=MAX_TOKENS_AKTUALITY):
+def _zavolej_clauda(client, prompt, max_tokens=MAX_TOKENS_AKTUALITY, uloha=""):
     """Volání Clauda s automatickou opravou/opakováním při vadném JSON.
 
     1. pokus: normální volání
@@ -179,7 +232,7 @@ def _zavolej_clauda(client, prompt, max_tokens=MAX_TOKENS_AKTUALITY):
     """
     posledni_chyba = None
     for pokus in (1, 2):
-        text = _surove_volani(client, prompt, max_tokens)
+        text = _surove_volani(client, prompt, max_tokens, uloha)
         try:
             return json.loads(text)
         except json.JSONDecodeError as chyba:
@@ -192,6 +245,7 @@ def _zavolej_clauda(client, prompt, max_tokens=MAX_TOKENS_AKTUALITY):
                 "zejména escapuj uvozovky uvnitř textů. Odpověz POUZE "
                 f"platným JSON, žádný jiný text.\n\n{text}",
                 max_tokens,
+                uloha,
             )
             try:
                 return json.loads(oprava)
@@ -322,7 +376,8 @@ SEZNAM ZPRÁV:
 
     if nove:
         print(f"Volání 1/3: výběr a překlad {len(nove)} nových zpráv ({MODEL})...")
-        surove_karty = _zavolej_clauda(client, prompt_karty, MAX_TOKENS_KARTY)
+        surove_karty = _zavolej_clauda(client, prompt_karty, MAX_TOKENS_KARTY,
+                                       "karty")
         dnes = _ted().strftime("%Y-%m-%d")
         for v in surove_karty:
             original = nove[v["id"]]
@@ -452,7 +507,8 @@ SEZNAM ZPRÁV:
     # bez sekce Aktuality. Skutečná chyba se vypíše do logu k diagnostice.
     aktuality, sledovat, ft_briefing = [], [], None
     try:
-        surova_odpoved = _zavolej_clauda(client, prompt_aktuality, MAX_TOKENS_AKTUALITY)
+        surova_odpoved = _zavolej_clauda(client, prompt_aktuality,
+                                         MAX_TOKENS_AKTUALITY, "aktuality")
         if isinstance(surova_odpoved, list):   # pojistka, kdyby vrátil jen pole
             surova_odpoved = {"aktuality": surova_odpoved, "sledovat": []}
         surove_aktuality = surova_odpoved.get("aktuality", [])
@@ -517,9 +573,9 @@ SEZNAM ZPRÁV:
     except (Exception, SystemExit) as chyba:
         print(f"  Kontrola faktů se nepovedla ({chyba}) — používám neověřenou verzi.")
 
-    # Přehled spotřeby za celý běh (orientační cena dle sazeb Sonnet)
+    # Přehled spotřeby za celý běh (orientační cena podle ceníku modelu)
     vstup, vystup = _SPOTREBA["vstup"], _SPOTREBA["vystup"]
-    cena = vstup / 1e6 * 3 + vystup / 1e6 * 15
+    cena = cena_usd(vstup, vystup)
     print(f"Spotřeba API: {vstup:,} tokenů vstup + {vystup:,} výstup "
           f"≈ ${cena:.2f}".replace(",", " "))
 
@@ -577,7 +633,7 @@ POLOŽKY:
 {chr(10).join(polozky)}"""
 
     print(f"Volání 3/3: kontrola faktů ({MODEL})...")
-    kontrola = _zavolej_clauda(client, prompt, MAX_TOKENS_FAKTA)
+    kontrola = _zavolej_clauda(client, prompt, MAX_TOKENS_FAKTA, "fakta")
 
     opravy, smazano = 0, 0
     smazat_karty, smazat_akt = set(), set()
