@@ -24,8 +24,9 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    # Pojistka: kdyby se cokoli zaseklo, běh se ukončí po 25 minutách
-    timeout-minutes: 25
+    # Pojistka: kdyby se cokoli zaseklo, běh se ukončí po 40 minutách
+    # (namluvení podcastu trvá pár minut)
+    timeout-minutes: 40
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -37,6 +38,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip   # stažené balíčky (hlavně PyTorch) se drží v cache
 
       - name: Nainstalovat závislosti
         run: pip install -r requirements.txt
@@ -69,15 +71,18 @@ jobs:
           restore-keys: |
             podcast-
 
-      # Model hlasu Piper (~60 MB) – stáhne se jednou, pak se bere z cache.
-      # Změna config.py vytvoří novou cache (kdyby se měnil hlas).
+      # Modely hlasu (Pocket TTS ~400 MB, záložní Piper ~60 MB) – stáhnou
+      # se jednou, pak se berou z cache. Změna config.py vytvoří novou cache.
       - name: Obnovit hlas pro podcast
         uses: actions/cache@v4
         with:
-          path: hlasy
-          key: hlasy-${{ hashFiles('config.py') }}
+          path: |
+            hlasy
+            ~/.cache/huggingface
+            ~/.cache/pocket_tts
+          key: hlasy-v2-${{ hashFiles('config.py') }}
           restore-keys: |
-            hlasy-
+            hlasy-v2-
 
       # Uchová poslední vygenerovaná data — po pushi se z nich web
       # přestaví zadarmo, bez volání Claude API

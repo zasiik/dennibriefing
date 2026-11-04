@@ -139,30 +139,32 @@ nikdo ho neuvidí.
 # Podcast – audio verze briefingu
 
 Každé ráno po vygenerování webu napíše Claude z aktualit ~5minutový mluvený
-text, open-source hlas **Piper** ho přímo na GitHubu namluví do MP3 a na webu
-se nad aktualitami objeví přehrávač. Zároveň vznikne podcastový feed
-**https://dennibriefing.cz/podcast.xml**. Kód je v `podcast.py`, nastavení
-v `config.py` (sekce PODCAST).
+text a open-source model **Pocket TTS** ho přímo na GitHubu namluví hlasem
+**Kasandry**. Na webu se nad aktualitami objeví přehrávač a vznikne podcastový
+feed **https://dennibriefing.cz/podcast.xml**. Kód je v `podcast.py`,
+nastavení v `config.py` (sekce PODCAST).
 
 ## Krok 1 – Nic, běží to samo a zdarma
 
-Piper nepotřebuje žádný účet ani klíč. Model hlasu (~60 MB) se při prvním
-běhu stáhne a pak leží v cache na GitHubu. Namluvení trvá asi půl minuty.
+Bez účtu, bez klíče, bez placení. Jak to funguje:
 
-- **Hlas:** `PODCAST_PIPER_HLAS` – `cs_CZ-jirka-medium` (mužský, výchozí)
-  nebo `cs_CZ-kasandra-medium` (ženský; u něj nastav `PODCAST_PIPER_RYCHLOST = 1.0`).
-- **Tempo:** `PODCAST_PIPER_RYCHLOST` – menší číslo = rychleji.
-- **Výslovnost cizích slov:** Piper čte vše po česky, takže anglická jména
-  přepisuje podle slovníku `PODCAST_VYSLOVNOST` (např. Microsoft → Majkrosoft).
-  Když nějaké jméno zní špatně, dopiš ho tam.
+- **Model:** český Pocket TTS (Kyutai), natrénovaný na ~1000 hodinách české
+  řeči z Poslanecké sněmovny. Barvu hlasu přebírá z krátké nahrávky
+  `podcast-hlas-vzor.wav` (hlas Kasandra, CC BY 4.0). Namluvení trvá pár minut.
+- **Hlídač:** každou větu namlouvá zvlášť a když je zvuk podezřele krátký nebo
+  dlouhý (model větu zkrátil či „ujel"), vygeneruje ji znovu.
+- **Záloha:** kdyby Pocket selhal, epizodu namluví starší hlas Piper (taky Kasandra).
+- **Výslovnost:** hlas čte všechno po česky, takže anglická jména se přepisují
+  podle slovníku `PODCAST_VYSLOVNOST` (Microsoft → Majkrosoft) a zbylé číslice
+  se převedou na slova. Když nějaké jméno zní špatně, dopiš ho do slovníku.
+- **Jiný hlas:** stačí nahradit `podcast-hlas-vzor.wav` jinou čistou nahrávkou
+  (10–20 s, jeden mluvčí, bez hudby) – model převezme její barvu hlasu.
+  Používej jen nahrávku, ke které máš práva.
 - Chceš epizodu hned, ne až ráno? **Actions → Run workflow.**
 
-> Přirozenější hlas (volitelné): Azure (0,5 mil. znaků měsíčně zdarma, účet
-> chce kartu) nebo ElevenLabs (placené). V `config.py` přepni
-> `PODCAST_HLAS_SLUZBA` na `"azure"` / `"elevenlabs"` a na GitHub přidej secret
-> `AZURE_SPEECH_KEY` / `ELEVENLABS_API_KEY`. Pro Azure: portal.azure.com →
-> Create a resource → Speech → tarif Free F0, region West Europe → Keys and
-> Endpoint → KEY 1.
+> Placené hlasy (volitelné): v `config.py` přepni `PODCAST_HLAS_SLUZBA` na
+> `"azure"` / `"elevenlabs"` a na GitHub přidej secret `AZURE_SPEECH_KEY` /
+> `ELEVENLABS_API_KEY`.
 
 ## Krok 2 – Apple Podcasts a Spotify (až vyjde první epizoda)
 
@@ -192,6 +194,7 @@ weby. Skript se do stránek vkládá sám, když je v `config.py` vyplněný
 2. Statistiky pak najdeš na **https://dennibriefing.goatcounter.com**.
 3. Ať se nepočítají tvoje vlastní návštěvy: na každém svém zařízení
    jednou otevři **https://dennibriefing.cz/#toggle-goatcounter**.
+4. Potvrď e-mail odkazem, který ti GoatCounter poslal (kvůli obnově hesla).
 
 Kromě návštěv stránek se zaznamenává, co lidé rozklikávají (v přehledu
 jsou to položky označené jako události):
