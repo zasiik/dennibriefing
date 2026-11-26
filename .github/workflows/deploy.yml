@@ -131,10 +131,10 @@ jobs:
           echo "dennibriefing.cz" > public/CNAME
 
       - name: Nahrát artefakt pro Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: public
 
       - name: Nasadit na GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
