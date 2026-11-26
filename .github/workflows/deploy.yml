@@ -22,14 +22,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-deploy:
+  # 1) Vygeneruje web a nahraje ho jako artefakt "github-pages"
+  build:
     runs-on: ubuntu-latest
     # Pojistka: kdyby se cokoli zaseklo, běh se ukončí po 40 minutách
     # (namluvení podcastu trvá pár minut)
     timeout-minutes: 40
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Stáhnout repozitář
         uses: actions/checkout@v4
@@ -135,6 +133,29 @@ jobs:
         with:
           path: public
 
+  # 2) Zveřejní artefakt na GitHub Pages — v samostatném jobu.
+  # Od 24. 11. 2026 GitHub nový artefakt nezobrazí hned po nahrání
+  # (actions/deploy-pages#451) a nasazení ve stejném jobu ho nenašlo.
+  # Proto zvlášť a s jedním opakováním. Při selhání NEspouštět
+  # "Re-run" celého běhu — druhé nahrání artefaktu nasazení rozbije.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
+    steps:
       - name: Nasadit na GitHub Pages
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Chvíli počkat před opakováním
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
+      - name: Nasadit na GitHub Pages (2. pokus)
+        id: deployment2
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5
